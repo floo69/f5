@@ -1,0 +1,144 @@
+{
+  "doc_id": "a1b2c3",
+  "sha256_in": "a3f9c2e81b7d4f60a3f9c2e81b7d4f60a3f9c2e81b7d4f60a3f9c2e81b7d4f60",
+  "sha256_out": "7be1049d55c2a8137be1049d55c2a8137be1049d55c2a8137be1049d55c2a813",
+  "detector_versions": {
+    "aadhaar": "1.0",
+    "fp_classical": "1.0"
+  },
+  "page_count": 2,
+  "status": "BLOCKED_FOR_REVIEW",
+  "pages": [
+    {
+      "page": 0,
+      "size_pt": [
+        595.28,
+        841.89
+      ],
+      "text_layer": true,
+      "ocr_quality": 1,
+      "decision": "BLOCK_FOR_REVIEW",
+      "reasons": [
+        "Verification found residual content after redaction"
+      ],
+      "findings": [
+        {
+          "type": "FINGERPRINT",
+          "page": 0,
+          "bbox_pt": [
+            88,
+            640,
+            168,
+            730
+          ],
+          "confidence": 0.93,
+          "source": "classical",
+          "value_masked": null,
+          "redact": true
+        },
+        {
+          "type": "FINGERPRINT",
+          "page": 0,
+          "bbox_pt": [
+            400,
+            640,
+            480,
+            730
+          ],
+          "confidence": 0.88,
+          "source": "classical",
+          "value_masked": null,
+          "redact": true
+        },
+        {
+          "type": "AADHAAR",
+          "page": 0,
+          "bbox_pt": [
+            132,
+            402,
+            262,
+            416
+          ],
+          "confidence": 0.99,
+          "source": "textlayer",
+          "value_masked": "XXXX XXXX 0124",
+          "redact": true
+        },
+        {
+          "type": "MASKED_AADHAAR",
+          "page": 0,
+          "bbox_pt": [
+            132,
+            452,
+            262,
+            466
+          ],
+          "confidence": 0.97,
+          "source": "textlayer",
+          "value_masked": "XXXX XXXX 7731",
+          "redact": false
+        }
+      ],
+      "counts": {
+        "FINGERPRINT": 2,
+        "AADHAAR": 1,
+        "VID": 0,
+        "MASKED_AADHAAR": 1
+      },
+      "timings_ms": {
+        "render": 12.1,
+        "text": 3,
+        "aadhaar": 0.4,
+        "fingerprint": 180.2
+      }
+    },
+    {
+      "page": 1,
+      "size_pt": [
+        595.28,
+        841.89
+      ],
+      "text_layer": true,
+      "ocr_quality": 1,
+      "decision": "PUBLISH",
+      "reasons": [
+        "No sensitive content found"
+      ],
+      "findings": [],
+      "counts": {
+        "FINGERPRINT": 0,
+        "AADHAAR": 0,
+        "VID": 0,
+        "MASKED_AADHAAR": 0
+      },
+      "timings_ms": {
+        "render": 11.4,
+        "text": 2.6,
+        "aadhaar": 0.3,
+        "fingerprint": 152.7
+      }
+    }
+  ],
+  "verification": {
+    "status": "fail",
+    "problems": [
+      {
+        "page": 0,
+        "type": "AADHAAR",
+        "bbox_pt": [
+          132,
+          402,
+          262,
+          416
+        ],
+        "detail": "Aadhaar-like digits still present in text layer after redaction"
+      }
+    ]
+  },
+  "timings_ms": {
+    "detect": 300,
+    "redact": 40,
+    "verify": 250,
+    "total": 610
+  }
+}

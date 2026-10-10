@@ -1,0 +1,160 @@
+{
+  "doc_id": "a1b2c3",
+  "sha256_in": "a3f9c2e81b7d4f60a3f9c2e81b7d4f60a3f9c2e81b7d4f60a3f9c2e81b7d4f60",
+  "sha256_out": "7be1049d55c2a8137be1049d55c2a8137be1049d55c2a8137be1049d55c2a813",
+  "detector_versions": {
+    "aadhaar": "1.0",
+    "fp_classical": "1.0"
+  },
+  "page_count": 3,
+  "status": "BLOCKED_FOR_REVIEW",
+  "pages": [
+    {
+      "page": 0,
+      "size_pt": [
+        595.28,
+        841.89
+      ],
+      "text_layer": true,
+      "ocr_quality": 1,
+      "decision": "REDACT_AND_PUBLISH",
+      "reasons": [
+        "2 thumb impressions",
+        "1 Aadhaar number",
+        "1 masked Aadhaar (already compliant)"
+      ],
+      "findings": [
+        {
+          "type": "FINGERPRINT",
+          "page": 0,
+          "bbox_pt": [
+            88,
+            640,
+            168,
+            730
+          ],
+          "confidence": 0.93,
+          "source": "classical",
+          "value_masked": null,
+          "redact": true
+        },
+        {
+          "type": "FINGERPRINT",
+          "page": 0,
+          "bbox_pt": [
+            400,
+            640,
+            480,
+            730
+          ],
+          "confidence": 0.88,
+          "source": "classical",
+          "value_masked": null,
+          "redact": true
+        },
+        {
+          "type": "AADHAAR",
+          "page": 0,
+          "bbox_pt": [
+            132,
+            402,
+            262,
+            416
+          ],
+          "confidence": 0.99,
+          "source": "textlayer",
+          "value_masked": "XXXX XXXX 0124",
+          "redact": true
+        },
+        {
+          "type": "MASKED_AADHAAR",
+          "page": 0,
+          "bbox_pt": [
+            132,
+            452,
+            262,
+            466
+          ],
+          "confidence": 0.97,
+          "source": "textlayer",
+          "value_masked": "XXXX XXXX 7731",
+          "redact": false
+        }
+      ],
+      "counts": {
+        "FINGERPRINT": 2,
+        "AADHAAR": 1,
+        "VID": 0,
+        "MASKED_AADHAAR": 1
+      },
+      "timings_ms": {
+        "render": 12.1,
+        "text": 3,
+        "aadhaar": 0.4,
+        "fingerprint": 180.2
+      }
+    },
+    {
+      "page": 1,
+      "size_pt": [
+        595.28,
+        841.89
+      ],
+      "text_layer": true,
+      "ocr_quality": 1,
+      "decision": "PUBLISH",
+      "reasons": [
+        "No sensitive content found"
+      ],
+      "findings": [],
+      "counts": {
+        "FINGERPRINT": 0,
+        "AADHAAR": 0,
+        "VID": 0,
+        "MASKED_AADHAAR": 0
+      },
+      "timings_ms": {
+        "render": 11.4,
+        "text": 2.6,
+        "aadhaar": 0.3,
+        "fingerprint": 152.7
+      }
+    },
+    {
+      "page": 2,
+      "size_pt": [
+        595.28,
+        841.89
+      ],
+      "text_layer": false,
+      "ocr_quality": 0.31,
+      "decision": "BLOCK_FOR_REVIEW",
+      "reasons": [
+        "Scanned page, OCR quality 0.31 is below 0.55; absence of Aadhaar numbers cannot be verified"
+      ],
+      "findings": [],
+      "counts": {
+        "FINGERPRINT": 0,
+        "AADHAAR": 0,
+        "VID": 0,
+        "MASKED_AADHAAR": 0
+      },
+      "timings_ms": {
+        "render": 38.9,
+        "text": 0,
+        "aadhaar": 0.2,
+        "fingerprint": 410.5
+      }
+    }
+  ],
+  "verification": {
+    "status": "pass",
+    "problems": []
+  },
+  "timings_ms": {
+    "detect": 752.1,
+    "redact": 41,
+    "verify": 311.6,
+    "total": 1104.7
+  }
+}
