@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     aws_region: str = ""
     jev_api_key: str = ""
     jev_base_url: str = ""
+    # v2-v5 deterministic decision and detector controls.
+    detector: Literal["classical", "onnx", "fused"] = "classical"
+    decision_backend: Literal["rules", "jev"] = "rules"
+    decision_fingerprint_threshold: float = 0.35
+    decision_low_conf_threshold: float = 0.20
+    decision_scanned_ocr_threshold: float = 0.55
+    decision_timeout_ms: int = 300
+    fusion_iou_threshold: float = 0.30
+    fusion_agreement_bonus: float = 0.10
+    model_path: str = "data/models/thumb_det_int8.onnx"
 
     @property
     def allowed_hosts(self) -> list[str]:

@@ -38,6 +38,8 @@ def certificate_dict(result, filename: str) -> dict:
             for p in result.pages
         ],
         "detector_versions": result.detector_versions,
+        "detector_mode": result.detector_mode,
+        "detector_status": result.detector_status,
         "processing_ms": result.timings_ms,
         "processed_locally": True,
     }

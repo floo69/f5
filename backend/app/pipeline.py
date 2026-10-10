@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import time
-from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,15 +15,21 @@ import numpy as np
 import pymupdf
 from pydantic import BaseModel
 
-from backend.app.core import aadhaar, fp_classical, ocr
+from backend.app.core import aadhaar, fp_classical, fp_onnx, fusion, ocr
+from backend.app.core.decision import DecisionFinding, DecisionRequest, decide
 from backend.app.core.redact import redact_pdf
-from backend.app.core.types import REDACT_TYPES, Finding, PageText
+from backend.app.core.types import Finding, PageText
 from backend.app.core.verify import Verification, verify_pdf
+from backend.app.settings import settings
 
 FP_DPI = 200
 OCR_DPI = 250
-MIN_OCR_QUALITY = 0.55
-DETECTOR_VERSIONS = {"aadhaar": "1.0", "fp_classical": "1.0", "pipeline": "1.0"}
+DETECTOR_VERSIONS = {
+    "aadhaar": "1.1",
+    "fp_classical": "1.1",
+    "pipeline": "2.0",
+    "decision": "system-one-rules-v2",
+}
 
 LABELS = {
     "FINGERPRINT": ("thumb impression", "thumb impressions"),
@@ -44,6 +49,8 @@ class PageResult(BaseModel):
     findings: list[Finding]
     counts: dict[str, int]
     timings_ms: dict[str, float]
+    system_one: dict[str, object] = {}
+    detector_sources: list[str] = []
 
 
 class Result(BaseModel):
@@ -56,25 +63,13 @@ class Result(BaseModel):
     verification: Verification
     timings_ms: dict[str, float]
     detector_versions: dict[str, str]
+    detector_mode: str = "classical"
+    detector_status: dict[str, object] = {}
 
 
 def _gray(page: pymupdf.Page, dpi: int) -> np.ndarray:
     pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
     return np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width).copy()
-
-
-def _decide(findings: list[Finding], text_layer: bool, ocr_quality: float) -> tuple[str, list[str]]:
-    """Temporary v1 rule; v2 replaces it with the System-One decision engine."""
-    counts = Counter(f.type for f in findings)
-    reasons = [f"{n} {LABELS[t][n != 1]}" for t, n in sorted(counts.items(), key=lambda kv: kv[0])]
-    if not text_layer and ocr_quality < MIN_OCR_QUALITY:
-        return "BLOCK_FOR_REVIEW", [
-            f"OCR quality {ocr_quality:.2f} too low to prove absence",
-            *reasons,
-        ]
-    if any(f.redact and f.type in REDACT_TYPES for f in findings):
-        return "REDACT_AND_PUBLISH", reasons
-    return "PUBLISH", reasons or ["nothing sensitive found"]
 
 
 def process_pdf(
@@ -90,6 +85,12 @@ def process_pdf(
     progress and progress(0, n)
 
     pages: list[dict] = []
+    detector_status: dict[str, object] = {
+        "mode": settings.detector,
+        "classical": {"available": True, "active": settings.detector in {"classical", "fused"}},
+        "onnx": {**fp_onnx.model_info(settings.model_path), "active": settings.detector in {"onnx", "fused"}},
+        "degraded": False,
+    }
     futures = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for pno, page in enumerate(doc):
@@ -98,15 +99,32 @@ def process_pdf(
             gray_fp = _gray(page, FP_DPI)
             gray_ocr = _gray(page, OCR_DPI) if pt is None else None
             t1 = time.perf_counter()
+            onnx_findings: list[Finding] = []
+            if settings.detector in {"onnx", "fused"}:
+                try:
+                    onnx_findings = fp_onnx.detect_fingerprint_regions(page, pno, settings.model_path)
+                except fp_onnx.DetectorUnavailable as exc:
+                    if settings.detector == "onnx":
+                        raise ValueError(str(exc)) from exc
+                    detector_status["degraded"] = True
+                    detector_status["onnx"]["active"] = False
+                    detector_status["onnx"]["error"] = str(exc)
+                except fp_onnx.DetectorInferenceError as exc:
+                    if settings.detector == "onnx":
+                        raise ValueError(str(exc)) from exc
+                    detector_status["degraded"] = True
+                    detector_status["onnx"]["active"] = False
+                    detector_status["onnx"]["error"] = str(exc)
             pages.append(
                 {
                     "page": pno,
                     "size_pt": (page.rect.width, page.rect.height),
                     "pt": pt,
+                    "onnx_findings": onnx_findings,
                     "timings_ms": {"render": (t1 - t0) * 1000},
                 }
             )
-            futures.append(pool.submit(_detect, pno, gray_fp, gray_ocr, pt))
+            futures.append(pool.submit(_detect, pno, gray_fp, gray_ocr, pt, onnx_findings))
         doc.close()
 
         all_findings: list[Finding] = []
@@ -114,7 +132,25 @@ def process_pdf(
         for i, fut in enumerate(futures):
             pt, findings, tms = fut.result()
             p = pages[i]
-            decision, reasons = _decide(findings, pt.text_layer, pt.ocr_quality)
+            page_area = p["size_pt"][0] * p["size_pt"][1]
+            system_one = decide(
+                DecisionRequest(
+                    doc_id=doc_id,
+                    page=p["page"],
+                    text_layer=pt.text_layer,
+                    ocr_quality=pt.ocr_quality,
+                    findings=[
+                        DecisionFinding(
+                            type=f.type,
+                            confidence=f.confidence,
+                            sources=f.source.split("+"),
+                            area_ratio=((f.bbox_pt[2] - f.bbox_pt[0]) * (f.bbox_pt[3] - f.bbox_pt[1])) / page_area,
+                        )
+                        for f in findings
+                    ],
+                )
+            )
+            decision, reasons = system_one.action, system_one.reasons
             all_findings.extend(findings)
             page_results.append(
                 PageResult(
@@ -127,6 +163,8 @@ def process_pdf(
                     findings=findings,
                     counts={t: sum(f.type == t for f in findings) for t in LABELS},
                     timings_ms={k: round(v, 1) for k, v in {**p["timings_ms"], **tms}.items()},
+                    system_one=system_one.model_dump(),
+                    detector_sources=sorted({source for f in findings for source in f.source.split("+")}),
                 )
             )
             progress and progress(i + 1, n)
@@ -145,6 +183,13 @@ def process_pdf(
         if pr.page in bad_pages:
             pr.decision = "BLOCK_FOR_REVIEW"
             pr.reasons.insert(0, "verification found something after redaction")
+            pr.system_one = {
+                **pr.system_one,
+                "action": "BLOCK_FOR_REVIEW",
+                "reason_codes": [*pr.system_one.get("reason_codes", []), "VERIFICATION_FAILED"],
+                "reasons": [*pr.reasons],
+                "backend": "rules-verification-guard",
+            }
     blocked = verification.status != "pass" or any(
         p.decision == "BLOCK_FOR_REVIEW" for p in page_results
     )
@@ -164,6 +209,8 @@ def process_pdf(
             "total": round((t_verify - t_start) * 1000, 1),
         },
         detector_versions=DETECTOR_VERSIONS,
+        detector_mode=settings.detector,
+        detector_status=detector_status,
     )
     return result, redacted
 
@@ -174,7 +221,11 @@ def _has_text_layer(page: pymupdf.Page) -> bool:
 
 
 def _detect(
-    pno: int, gray_fp: np.ndarray, gray_ocr: np.ndarray | None, pt: PageText | None
+    pno: int,
+    gray_fp: np.ndarray,
+    gray_ocr: np.ndarray | None,
+    pt: PageText | None,
+    onnx_findings: list[Finding] | None = None,
 ) -> tuple[PageText, list[Finding], dict[str, float]]:
     t0 = time.perf_counter()
     if pt is None:
@@ -182,7 +233,14 @@ def _detect(
     t1 = time.perf_counter()
     numbers = aadhaar.find_numbers(pt, pno)
     t2 = time.perf_counter()
-    prints = fp_classical.detect_gray(gray_fp, pno, dpi=FP_DPI)
+    classical = fp_classical.detect_gray(gray_fp, pno, dpi=FP_DPI)
+    onnx = onnx_findings or []
+    if settings.detector == "onnx":
+        prints = onnx
+    elif settings.detector == "fused":
+        prints = fusion.fuse_candidates(classical, onnx)
+    else:
+        prints = classical
     t3 = time.perf_counter()
     return (
         pt,

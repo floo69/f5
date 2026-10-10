@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import json
 import logging
+import asyncio
 import threading
 import uuid
+import shutil
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -20,10 +22,13 @@ import numpy as np
 import pymupdf
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from pydantic import BaseModel, Field
 
 from backend.app.core.report import certificate_dict, certificate_pdf
+from backend.app.core.fp_onnx import model_info
 from backend.app.pipeline import process_pdf
+from backend.app.settings import settings
 
 log = logging.getLogger("thumbshield")
 OUT_DIR = Path("data/out")
@@ -57,11 +62,46 @@ _jobs: dict[str, dict] = {}
 _originals: dict[str, bytes] = {}
 _lock = threading.Lock()
 _one_at_a_time = threading.Semaphore(1)  # laptop RAM budget
+_missions: dict[str, dict] = {}
+_audits: dict[str, dict] = {}
+
+
+class MissionRequest(BaseModel):
+    mission: str = Field(min_length=1, max_length=1000)
+    sro: str = ""
+    year_from: int = Field(2018, ge=1900, le=2100)
+    year_to: int = Field(2020, ge=1900, le=2100)
+    max_docs: int = Field(15, ge=1, le=120)
+    live_agent: bool = False
+
+
+class AuditRequest(BaseModel):
+    sro: str = ""
+    year_from: int = Field(2018, ge=1900, le=2100)
+    year_to: int = Field(2020, ge=1900, le=2100)
+    max_docs: int = Field(15, ge=1, le=120)
 
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "local_only": True}
+    tesseract = bool(shutil.which("tesseract"))
+    onnx = model_info(settings.model_path)
+    return {
+        "status": "ok",
+        "local_only": True,
+        "detector_mode": settings.detector,
+        "detector": {"classical": {"available": True, "active": settings.detector in {"classical", "fused"}}, "onnx": {**onnx, "active": settings.detector in {"onnx", "fused"}}},
+        "offline_ready": bool(tesseract),
+        "capabilities": {"tesseract": tesseract, "onnxruntime": _onnxruntime_available()},
+    }
+
+
+def _onnxruntime_available() -> bool:
+    try:
+        import onnxruntime  # noqa: F401
+        return True
+    except Exception:
+        return False
 
 
 def _new_job(filename: str, pdf: bytes, background: BackgroundTasks) -> dict:
@@ -105,7 +145,7 @@ def _run(job_id: str) -> None:
         except Exception as e:  # surface a clean error; details go to the server log
             log.exception("processing failed for job %s", job_id)
             job["status"] = "error"
-            job["error"] = f"processing failed: {type(e).__name__}"
+            job["error"] = f"processing failed: {e}"
 
 
 @app.post("/api/process")
@@ -229,3 +269,102 @@ def _annotate_before(
         color = (60, 160, 40) if f["type"] == "MASKED_AADHAAR" else (40, 40, 220)
         cv2.rectangle(out, (x0 - 2, y0 - 2), (x1 + 2, y1 + 2), color, 2)
     return out
+
+
+# v2-v5 mission control: deterministic scanner first, bounded agents second.
+def _mission_emit(state: dict, agent: str, message: str, **extra) -> None:
+    state["events"].append({"agent": agent, "message": message, "colour": {"Orchestrator": "#0f766e", "Auditor": "#2563eb", "Reviewer": "#b45309", "Notice": "#7c3aed"}.get(agent, "#64748b"), **extra})
+
+
+def _audit_emit(state: dict, event_type: str, **extra) -> None:
+    state["events"].append({"type": event_type, "timestamp": __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat(), **extra})
+
+
+def _run_audit(audit_id: str, request: AuditRequest) -> None:
+    state = _audits[audit_id]
+    try:
+        _audit_emit(state, "audit_started", sro=request.sro, year_from=request.year_from, year_to=request.year_to, max_docs=request.max_docs)
+        _audit_emit(state, "search_submitted")
+        from agents.auditor import audit
+        state["results"] = audit(request.sro, request.year_from, request.year_to, request.max_docs, emit=lambda e: _audit_emit(state, e.pop("type", "progress"), **e))
+        _audit_emit(state, "audit_completed", reviewed=len(state["results"]))
+    except Exception as exc:  # fail closed, surface structured state
+        state["error"] = str(exc)
+        _audit_emit(state, "error", message=str(exc))
+    state["done"] = True
+
+
+@app.post("/api/audit")
+def start_audit(request: AuditRequest, background: BackgroundTasks) -> dict:
+    audit_id = uuid.uuid4().hex
+    _audits[audit_id] = {"audit_id": audit_id, "done": False, "results": [], "events": [], "error": None}
+    background.add_task(_run_audit, audit_id, request)
+    return {"audit_id": audit_id, "status": "started", "allowlist": ["localhost:8100", "127.0.0.1:8100"]}
+
+
+@app.get("/api/audit/{audit_id}")
+def audit_status(audit_id: str) -> dict:
+    if audit_id not in _audits:
+        raise HTTPException(404, "unknown audit")
+    return _audits[audit_id]
+
+
+@app.get("/api/audit/{audit_id}/events")
+async def audit_events(audit_id: str):
+    if audit_id not in _audits:
+        raise HTTPException(404, "unknown audit")
+
+    async def stream():
+        index = 0
+        while True:
+            state = _audits.get(audit_id)
+            if state is None: return
+            while index < len(state["events"]):
+                event = state["events"][index]; index += 1
+                yield f"event: {event.get('type', 'progress')}\ndata: {json.dumps(event, default=str)}\n\n"
+            if state["done"]: break
+            await asyncio.sleep(0.25)
+        yield f"event: complete\ndata: {json.dumps({'audit_id': audit_id, 'status': 'completed' if not state['error'] else 'failed'})}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _run_mission(mission_id: str, request: MissionRequest) -> None:
+    state = _missions[mission_id]
+    async def emit(agent: str, message: str, extra: dict):
+        _mission_emit(state, agent, message, **extra)
+    try:
+        from agents.orchestrator import run_mission
+        state["result"] = asyncio.run(run_mission(request.mission, request.sro, request.year_from, request.year_to, request.max_docs, emit, request.live_agent))
+    except Exception as exc:  # mission reports failures without pretending success
+        state["result"] = {"mission": request.mission, "rows": [], "reviews": [], "notices": [], "error": str(exc)}
+        _mission_emit(state, "Orchestrator", f"Mission failed safely: {exc}", error=True)
+    state["done"] = True
+
+
+@app.post("/api/mission")
+def start_mission(request: MissionRequest, background: BackgroundTasks) -> dict:
+    mission_id = uuid.uuid4().hex
+    _missions[mission_id] = {"mission_id": mission_id, "done": False, "events": [], "result": None}
+    background.add_task(_run_mission, mission_id, request)
+    return {"mission_id": mission_id, "status": "started"}
+
+
+@app.get("/api/mission/{mission_id}")
+def mission_status(mission_id: str) -> dict:
+    if mission_id not in _missions:
+        raise HTTPException(404, "unknown mission")
+    return _missions[mission_id]
+
+
+@app.get("/api/metrics")
+def metrics() -> dict:
+    return {
+        "synthetic_test_set": True,
+        "outbound_bytes": 0,
+        "pipeline": "v2 incremental pipeline",
+        "decision": "System-One rules with fail-closed guard",
+        "detector_mode": settings.detector,
+        "onnx": model_info(settings.model_path),
+        "metrics": "Unavailable until an actual held-out evaluation is run; no values are fabricated.",
+    }

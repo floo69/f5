@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field
 BBox = tuple[float, float, float, float]
 
 FindingType = Literal["FINGERPRINT", "AADHAAR", "VID", "MASKED_AADHAAR"]
-FindingSource = Literal["textlayer", "ocr", "classical", "onnx"]
+# Fused detector output uses a stable '+'-joined source list, e.g. classical+onnx.
+FindingSource = str
 
 # Types that must be destroyed before publication. MASKED_AADHAAR is already compliant.
 REDACT_TYPES: frozenset[str] = frozenset({"FINGERPRINT", "AADHAAR", "VID"})

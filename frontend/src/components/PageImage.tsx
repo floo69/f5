@@ -14,7 +14,7 @@ interface Props {
 const label = (t: Finding['type']) =>
   ({ FINGERPRINT: 'Thumbprint', AADHAAR: 'Aadhaar', VID: 'VID', MASKED_AADHAAR: 'Masked Aadhaar' })[t]
 
-/** Grey A4 placeholder with synthetic text bars; fingerprints pixelated (before) or blacked (after). */
+/** Demo-only fallback. Real results are always rendered by the backend. */
 function Placeholder({ page, view }: { page: PageResult; view: 'before' | 'after' }) {
   const [w, h] = page.size_pt
   const bars = Array.from({ length: 26 }, (_, i) => i)
@@ -63,7 +63,7 @@ export default function PageImage({ jobId, page, view, boxes, mock, dpi = 100, i
   const [w, h] = page.size_pt
   const [hover, setHover] = useState<number | null>(null)
   const [broken, setBroken] = useState(false)
-  const showPlaceholder = mock || broken
+  const showPlaceholder = mock
   const f = hover !== null ? page.findings[hover] : null
 
   return (
@@ -71,6 +71,10 @@ export default function PageImage({ jobId, page, view, boxes, mock, dpi = 100, i
       style={{ aspectRatio: `${w} / ${h}` }}>
       {showPlaceholder ? (
         <Placeholder page={page} view={view} />
+      ) : broken ? (
+        <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-red-700">
+          Could not load the rendered PDF page. Confirm the API is running on port 8000 and refresh.
+        </div>
       ) : (
         <img src={pageUrl(jobId, page.page, view, dpi)} alt={`Page ${page.page + 1}, ${view === 'before' ? 'original with thumbprints pixelated' : 'after redaction'}`}
           className="absolute inset-0 h-full w-full" onError={() => setBroken(true)} />

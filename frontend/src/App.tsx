@@ -4,12 +4,15 @@ import Header from './components/Header'
 import ProgressCard from './components/ProgressCard'
 import ResultView from './components/ResultView'
 import UploadCard from './components/UploadCard'
+import OperationsPanel from './components/OperationsPanel'
+import AuditPortal from './components/AuditPortal'
 
 type Phase = 'idle' | 'running' | 'result'
 
 export default function App() {
   const [phase, setPhase] = useState<Phase>('idle')
-  const [mock, setMock] = useState(api.isMock())
+  const [mock] = useState(api.isMock())
+  const [runtime, setRuntime] = useState<api.RuntimeStatus | null>(null)
   const [samples, setSamples] = useState<api.Sample[]>([])
   const [job, setJob] = useState<api.Job | null>(null)
   const [filename, setFilename] = useState('')
@@ -17,13 +20,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const timer = useRef<number | undefined>(undefined)
 
-  const enableMock = useCallback(async () => {
-    api.setMock(true)
-    setMock(true)
-    setSamples(await api.listSamples())
-  }, [])
-
-  // Boot: auto-load fixture with ?mock=..., else probe the backend and fall back to mock.
+  // Boot: mock mode is explicit via ?mock=...; normal mode requires the local API.
   useEffect(() => {
     void (async () => {
       if (api.isMock()) {
@@ -34,6 +31,7 @@ export default function App() {
         }
         return
       }
+      try { setRuntime(await api.runtimeStatus()) } catch { /* health check below reports the actionable error */ }
       if (await api.checkHealth()) {
         try {
           setSamples(await api.listSamples())
@@ -41,11 +39,11 @@ export default function App() {
           setError(e instanceof Error ? e.message : 'Could not load samples')
         }
       } else {
-        await enableMock()
+        setError('The local API is unavailable. Start backend.app.main on port 8000, then refresh.')
       }
     })()
     return () => window.clearTimeout(timer.current)
-  }, [enableMock])
+  }, [])
 
   const poll = useCallback((id: string) => {
     const tick = async () => {
@@ -95,7 +93,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <Header mock={mock} />
+      <Header mock={mock} status={runtime} />
       <main className="mx-auto max-w-7xl px-8 py-10">
         {phase === 'idle' && (
           <UploadCard
@@ -111,6 +109,8 @@ export default function App() {
         {phase === 'result' && result && (
           <ResultView result={result} mock={mock} onReset={reset} />
         )}
+        <OperationsPanel />
+        <AuditPortal />
       </main>
     </div>
   )

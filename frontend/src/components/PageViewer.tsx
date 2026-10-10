@@ -58,6 +58,9 @@ export default function PageViewer({ jobId, page, mock }: { jobId: string; page:
           <p className="mt-3 text-xs text-slate-500">
             {page.text_layer ? 'Text layer present' : `Scanned page · OCR quality ${page.ocr_quality.toFixed(2)}`}
           </p>
+          {page.system_one && <p className="mt-2 text-xs text-slate-500">
+            System-One: <span className="font-medium text-slate-700">{page.system_one.action}</span> · {page.system_one.backend ?? 'rules'}{page.system_one.fallback ? ' · fallback' : ''} · {page.system_one.latency_ms?.toFixed(1) ?? '0.0'} ms
+          </p>}
         </div>
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stage timings</h4>

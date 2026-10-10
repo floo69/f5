@@ -11,7 +11,7 @@ export interface Finding {
   page: number
   bbox_pt: [number, number, number, number]
   confidence: number
-  source: 'textlayer' | 'ocr' | 'classical'
+  source: 'textlayer' | 'ocr' | 'classical' | 'onnx' | 'classical+onnx'
   value_masked: string | null
   redact: boolean
 }
@@ -26,6 +26,7 @@ export interface PageResult {
   findings: Finding[]
   counts: Record<FindingType, number>
   timings_ms: Record<string, number>
+  system_one?: { action?: string; confidence?: number; backend?: string; fallback?: boolean; latency_ms?: number }
 }
 
 export interface Problem {
@@ -45,6 +46,15 @@ export interface Result {
   verification: { status: 'pass' | 'fail'; problems: Problem[] }
   timings_ms: Record<string, number>
   detector_versions: Record<string, string>
+  detector_mode?: 'classical' | 'onnx' | 'fused'
+  detector_status?: Record<string, unknown>
+}
+
+export interface RuntimeStatus {
+  detector_mode: 'classical' | 'onnx' | 'fused'
+  detector: { classical: { available: boolean; active: boolean }; onnx: { available: boolean; active: boolean; size_bytes?: number; quantization?: string } }
+  offline_ready: boolean
+  capabilities: { tesseract: boolean; onnxruntime: boolean }
 }
 
 export interface Job {
@@ -136,6 +146,10 @@ export async function checkHealth(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+export async function runtimeStatus(): Promise<RuntimeStatus> {
+  return json<RuntimeStatus>(await fetch('/api/health'))
 }
 
 export async function listSamples(): Promise<Sample[]> {

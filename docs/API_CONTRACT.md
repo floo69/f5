@@ -14,7 +14,7 @@ Everything runs locally; no endpoint calls an external service.
 | GET | `/api/files/{job_id}/page/{n}.png?view=before\|after&dpi=100` | page PNG |
 | GET | `/api/samples` | `[{"name": str, "mode": "born_digital"\|"scanned"}]` bundled synthetic samples |
 | POST | `/api/samples/{name}/process` | `{"job_id": str}` — process a sample without uploading |
-| GET | `/api/health` | `{"status": "ok", "local_only": true}` |
+| GET | `/api/health` | Runtime capability status, selected detector mode, model availability, and offline readiness |
 
 `view=before` is the ORIGINAL page with every FINGERPRINT bbox **pixelated (12 px mosaic)** and
 red outlines on all findings (green outline for MASKED_AADHAAR). A clean fingerprint image is
@@ -50,19 +50,23 @@ never served or written to disk. `view=after` is the redacted PDF's page.
       "findings": [
         {"type": "FINGERPRINT" | "AADHAAR" | "VID" | "MASKED_AADHAAR",
          "page": 0, "bbox_pt": [x0, y0, x1, y1], "confidence": 0.91,
-         "source": "textlayer" | "ocr" | "classical", "value_masked": "XXXX XXXX 0124" | null,
+         "source": "textlayer" | "ocr" | "classical" | "onnx" | "classical+onnx", "value_masked": "XXXX XXXX 0124" | null,
          "redact": true}
       ],
       "counts": {"FINGERPRINT": 2, "AADHAAR": 1, "VID": 0, "MASKED_AADHAAR": 1},
-      "timings_ms": {"render": 12.1, "text": 3.0, "aadhaar": 0.4, "fingerprint": 180.2}
+      "timings_ms": {"render": 12.1, "text": 3.0, "aadhaar": 0.4, "fingerprint": 180.2},
+      "detector_sources": ["classical"],
+      "system_one": {"action": "REDACT_AND_PUBLISH", "reason_codes": ["FINGERPRINT_THRESHOLD_MET"], "backend": "rules", "fallback": false, "latency_ms": 0.4}
     }
   ],
   "verification": {"status": "pass" | "fail", "problems": [{"page": 0, "type": "AADHAAR", "bbox_pt": [], "detail": "…"}]},
   "timings_ms": {"detect": 300.0, "redact": 40.0, "verify": 250.0, "total": 610.0},
-  "detector_versions": {"aadhaar": "1.0", "fp_classical": "1.0"}
+  "detector_versions": {"aadhaar": "1.1", "fp_classical": "1.1", "decision": "system-one-rules-v2"},
+  "detector_mode": "classical" | "onnx" | "fused",
+  "detector_status": {"mode": "classical", "degraded": false, "onnx": {"available": false, "active": false}}
 }
 ```
-Bboxes: PDF points, top-left origin (same as ground truth).
-Decision rule (v1, temporary until v2's engine): verification fail → BLOCK_FOR_REVIEW; any
-redactable finding → REDACT_AND_PUBLISH; scanned page with ocr_quality < 0.55 →
-BLOCK_FOR_REVIEW; else PUBLISH. Document status = BLOCKED_FOR_REVIEW if any page is blocked.
+Bboxes: PDF points, top-left origin (same as ground truth). System-One reason codes are
+machine-readable and the human-readable `reasons` remain backward-compatible. Verification
+failure has highest precedence; optional decision backends can only make outcomes more
+restrictive. Document status is `BLOCKED_FOR_REVIEW` if any page is blocked.

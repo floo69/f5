@@ -26,6 +26,33 @@ make lint               # uv run ruff check .
 `make api` (FastAPI :8000), `make portal` (mock registry :8100) and `make web` (frontend) are
 placeholders until v1/v3.
 
+## v2 detector and decision controls
+
+The default remains the V1 classical detector. Select another mode explicitly with an
+environment variable before starting the API:
+
+```powershell
+$env:DETECTOR = "classical"   # classical, onnx, or fused
+uv run uvicorn backend.app.main:app --reload --port 8000
+```
+
+`onnx` requires a locally supplied `data/models/thumb_det_fp32.onnx` or
+`data/models/thumb_det_int8.onnx` configured by `MODEL_PATH`; `fused` reports degraded status
+and keeps the classical detector active if the ONNX model is unavailable. Check
+`/api/health` for actual detector availability and offline capability status.
+
+Optional training/export commands are:
+
+```powershell
+uv sync --extra train
+uv run python -m synth.make_dataset
+uv run python -m ml.train_yolo --data data/datasets/yolo/data.yaml --imgsz 960 --device 0
+uv run python -m ml.export_onnx data/models/runs/thumb-det/weights/best.pt
+```
+
+Training results are not considered available until the generated run metrics and export
+validation files are inspected. See `docs/metrics_v2.md` and `docs/GPU.md`.
+
 ## Synthetic data (v0)
 
 - `synth/fingerprint_gen.py` — procedural thumb impressions (orientation field from singular

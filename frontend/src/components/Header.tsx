@@ -1,7 +1,8 @@
 import { ICONS } from './helpers'
 import { Icon } from './ui'
+import type { RuntimeStatus } from '../api'
 
-export default function Header({ mock }: { mock: boolean }) {
+export default function Header({ mock, status }: { mock: boolean; status: RuntimeStatus | null }) {
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-8 py-5">
@@ -24,6 +25,12 @@ export default function Header({ mock }: { mock: boolean }) {
             <Icon d={ICONS.lock} className="h-3.5 w-3.5" />
             Runs locally · no document leaves this machine
           </span>
+          {status && <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+            {status.detector_mode.toUpperCase()} · {status.detector.onnx.available ? `${status.detector.onnx.quantization ?? 'ONNX'} ${(status.detector.onnx.size_bytes ?? 0) / 1e6 > 0 ? `${((status.detector.onnx.size_bytes ?? 0) / 1e6).toFixed(1)} MB` : ''}` : 'ONNX unavailable'}
+          </span>}
+          {status && <span className={`rounded-full px-3 py-1.5 text-xs font-medium ring-1 ${status.offline_ready ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : 'bg-amber-50 text-amber-800 ring-amber-200'}`}>
+            {status.offline_ready ? 'Offline ready' : 'OCR dependency missing'}
+          </span>}
         </div>
       </div>
     </header>
