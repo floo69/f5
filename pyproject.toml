@@ -1,0 +1,46 @@
+[project]
+name = "thumbshield"
+version = "0.0.1"
+description = "Defensive on-device redaction of thumb impressions and Aadhaar numbers in land-registration deeds (synthetic data only)."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pymupdf",
+    "opencv-python-headless",
+    "numpy",
+    "pillow",
+    "pytesseract",
+    "reportlab",
+    "faker",
+    "pydantic>=2",
+    "pydantic-settings",
+    "onnxruntime",
+    "jinja2",
+    "python-multipart",
+    "sse-starlette",
+    "mcp",
+    "anthropic[mcp]",
+    "httpx",
+    "pytest",
+    "ruff",
+]
+
+[project.optional-dependencies]
+train = ["ultralytics"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["frontend", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
