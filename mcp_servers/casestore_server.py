@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import socket
 import sqlite3
@@ -22,8 +23,8 @@ from mcp.server.mcpserver import MCPServer
 from backend.app.settings import settings
 
 mcp = MCPServer("thumbshield-casestore")
-DATA_ROOT = Path("data").resolve()
-DB_PATH = DATA_ROOT / "cases.db"
+DATA_ROOT = Path(os.getenv("THUMBSHIELD_DATA_ROOT", "data")).resolve()
+DB_PATH = Path(os.getenv("THUMBSHIELD_DB_PATH", str(DATA_ROOT / "cases.db"))).resolve()
 MAX_PDF_BYTES = 25 * 1024 * 1024
 
 

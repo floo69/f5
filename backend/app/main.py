@@ -13,6 +13,7 @@ import asyncio
 import threading
 import uuid
 import shutil
+import os
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -95,7 +96,15 @@ def health() -> dict:
         "detector": {"classical": {"available": True, "active": settings.detector in {"classical", "fused"}}, "onnx": {**onnx, "active": settings.detector in {"onnx", "fused"}}},
         "offline_ready": bool(tesseract),
         "capabilities": {"tesseract": tesseract, "onnxruntime": _onnxruntime_available()},
+        "privacy": {"llm_enabled": bool(os.getenv("ANTHROPIC_API_KEY")), "network_scope": "Not instrumented", "external_upload_claim": "Not measured"},
+        "model": onnx,
     }
+
+
+@app.get("/api/evaluation")
+def evaluation_status() -> dict:
+    from scripts.evaluate import run
+    return run()
 
 
 def _onnxruntime_available() -> bool:

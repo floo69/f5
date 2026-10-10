@@ -7,6 +7,8 @@ import UploadCard from './components/UploadCard'
 import OperationsPanel from './components/OperationsPanel'
 import AuditPortal from './components/AuditPortal'
 import MissionControl from './components/MissionControl'
+import OfflinePrivacy from './components/OfflinePrivacy'
+import EvaluationPanel from './components/EvaluationPanel'
 
 type Phase = 'idle' | 'running' | 'result'
 
@@ -113,6 +115,8 @@ export default function App() {
         <OperationsPanel />
         <AuditPortal />
         <MissionControl />
+        <OfflinePrivacy />
+        <EvaluationPanel />
       </main>
     </div>
   )

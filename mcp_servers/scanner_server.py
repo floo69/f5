@@ -1,7 +1,7 @@
 """Scanner MCP server backed by the V2 scan/redaction/verification pipeline."""
 from __future__ import annotations
 
-import base64, hashlib, io, json, re
+import base64, hashlib, io, json, os, re
 from pathlib import Path
 
 import pymupdf as fitz
@@ -12,7 +12,7 @@ from backend.app.core.decision import DecisionRequest, decide
 from backend.app.pipeline import process_pdf
 
 mcp = MCPServer("thumbshield-scanner")
-DATA_ROOT = Path("data").resolve()
+DATA_ROOT = Path(os.getenv("THUMBSHIELD_DATA_ROOT", "data")).resolve()
 CASE_ROOT = DATA_ROOT / "out" / "cases"
 
 
