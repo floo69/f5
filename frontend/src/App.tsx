@@ -6,6 +6,7 @@ import ResultView from './components/ResultView'
 import UploadCard from './components/UploadCard'
 import OperationsPanel from './components/OperationsPanel'
 import AuditPortal from './components/AuditPortal'
+import MissionControl from './components/MissionControl'
 
 type Phase = 'idle' | 'running' | 'result'
 
@@ -111,6 +112,7 @@ export default function App() {
         )}
         <OperationsPanel />
         <AuditPortal />
+        <MissionControl />
       </main>
     </div>
   )

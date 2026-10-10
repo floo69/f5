@@ -23,8 +23,20 @@ make test               # uv run pytest -q
 make lint               # uv run ruff check .
 ```
 
-`make api` (FastAPI :8000), `make portal` (mock registry :8100) and `make web` (frontend) are
-placeholders until v1/v3.
+For the local demo use three terminals:
+
+```powershell
+.\.venv\Scripts\python.exe -m mock_portal.seed
+.\.venv\Scripts\python.exe -m uvicorn mock_portal.app:app --host 127.0.0.1 --port 8100
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+cd frontend; npm install; npm run dev
+```
+
+V4 adds Mission Control at the frontend, plural mission/SSE/report routes, review and notice
+read-only routes, bounded Auditor → Reviewer → Notice orchestration, and bilingual drafts.
+See [`docs/MCP.md`](docs/MCP.md) for the stdio servers. Optional live Anthropic/Playwright
+execution remains disabled unless explicitly configured; deterministic synthetic scanning stays
+authoritative.
 
 ## v2 detector and decision controls
 

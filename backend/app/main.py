@@ -63,6 +63,8 @@ _originals: dict[str, bytes] = {}
 _lock = threading.Lock()
 _one_at_a_time = threading.Semaphore(1)  # laptop RAM budget
 _missions: dict[str, dict] = {}
+_reviews: dict[str, dict] = {}
+_notices: dict[str, dict] = {}
 _audits: dict[str, dict] = {}
 
 
@@ -273,7 +275,7 @@ def _annotate_before(
 
 # v2-v5 mission control: deterministic scanner first, bounded agents second.
 def _mission_emit(state: dict, agent: str, message: str, **extra) -> None:
-    state["events"].append({"agent": agent, "message": message, "colour": {"Orchestrator": "#0f766e", "Auditor": "#2563eb", "Reviewer": "#b45309", "Notice": "#7c3aed"}.get(agent, "#64748b"), **extra})
+    state["events"].append({"mission_id": state.get("mission_id"), "event_id": uuid.uuid4().hex, "timestamp": __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat(), "agent": agent, "stage": agent.lower(), "type": "progress", "status": "running", "message": message, "colour": {"Orchestrator": "#2563eb", "Auditor": "#0891b2", "Reviewer": "#f59e0b", "Notice": "#7c3aed"}.get(agent, "#64748b"), **extra})
 
 
 def _audit_emit(state: dict, event_type: str, **extra) -> None:
@@ -355,6 +357,81 @@ def mission_status(mission_id: str) -> dict:
     if mission_id not in _missions:
         raise HTTPException(404, "unknown mission")
     return _missions[mission_id]
+
+
+@app.post("/api/missions")
+def start_mission_v4(request: MissionRequest, background: BackgroundTasks) -> dict:
+    return start_mission(request, background)
+
+
+@app.get("/api/missions/{mission_id}")
+def mission_status_v4(mission_id: str) -> dict:
+    return mission_status(mission_id)
+
+
+@app.get("/api/missions/{mission_id}/events")
+async def mission_events_v4(mission_id: str):
+    if mission_id not in _missions: raise HTTPException(404, "unknown mission")
+    async def stream():
+        index = 0
+        while True:
+            state = _missions[mission_id]
+            while index < len(state["events"]):
+                event = state["events"][index]; index += 1
+                yield f"event: {event.get('type', 'progress')}\ndata: {json.dumps(event, default=str)}\n\n"
+            if state["done"]: break
+            await asyncio.sleep(0.25)
+        yield f"event: complete\ndata: {json.dumps({'mission_id': mission_id, 'status': 'completed' if not state.get('error') else 'failed'})}\n\n"
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/missions/{mission_id}/report")
+def mission_report_v4(mission_id: str):
+    state = _missions.get(mission_id)
+    if not state: raise HTTPException(404, "unknown mission")
+    return {"mission_id": mission_id, "markdown": (state.get("result") or {}).get("report", ""), "status": "complete" if state["done"] else "running"}
+
+
+@app.get("/api/reviews")
+def list_reviews():
+    return list(_reviews.values())
+
+
+@app.get("/api/reviews/{review_id}")
+def get_review(review_id: str):
+    if review_id not in _reviews: raise HTTPException(404, "unknown review")
+    return _reviews[review_id]
+
+
+@app.post("/api/reviews/{review_id}/send-to-human")
+def send_review_to_human(review_id: str):
+    review = _reviews.get(review_id)
+    if not review: raise HTTPException(404, "unknown review")
+    review["status"] = "human_review_required"; review["action"] = "SEND_TO_HUMAN"
+    return review
+
+
+@app.post("/api/reviews/{review_id}/approve")
+def approve_review(review_id: str):
+    review = _reviews.get(review_id)
+    if not review: raise HTTPException(404, "unknown review")
+    if review.get("action") != "ADD_REDACTION":
+        raise HTTPException(400, "only validated redaction proposals can be approved")
+    # No UI path can mark a failed or unknown verification as safe.
+    review["status"] = "human_review_required"
+    review["error"] = "Approval requires the server-side verified redaction workflow"
+    return review
+
+
+@app.get("/api/notices")
+def list_notices():
+    return list(_notices.values())
+
+
+@app.get("/api/notices/{notice_id}")
+def get_notice(notice_id: str):
+    if notice_id not in _notices: raise HTTPException(404, "unknown notice")
+    return _notices[notice_id]
 
 
 @app.get("/api/metrics")
