@@ -29,7 +29,7 @@ HARD RULES
 STACK
 - Python 3.11, uv for env management. FastAPI backend. PyMuPDF (fitz) for PDF render/redact.
   OpenCV + NumPy for classical vision. pytesseract + Tesseract (eng + mal traineddata) for OCR.
-  onnxruntime for the edge model. ultralytics YOLOv8n only for training/export (AGPL-3.0 —
+  onnxruntime for the edge model. ultralytics YOLOv8n (CPU-only torch locally) only for training/export (AGPL-3.0 —
   fine for a hackathon, note it in README). reportlab + Faker(en_IN) for synthetic deeds.
 - MCP: official `mcp` Python SDK (FastMCP) for our servers; `npx @playwright/mcp@latest`
   for browser automation.
@@ -37,14 +37,26 @@ STACK
   runner (`client.beta.messages.tool_runner`) and the MCP conversion helpers
   (`from anthropic.lib.tools.mcp import async_mcp_tool`) to hand local stdio MCP server tools
   to Claude. Do NOT use the remote `mcp_servers` connector (our servers are local stdio).
-  Models come from env: ORCHESTRATOR_MODEL (default "claude-opus-5-5"), WORKER_MODEL (default
-  "claude-opus-5-5"; set "claude-haiku-5-5" to save credits). Exact IDs, no date suffixes.
-  Opus 5.5: don't send budget_tokens or thinking:{type:"disabled"} (400); set
-  output_config={"effort": ...} explicitly (default is medium); never use forced tool_choice
-  any/tool (400) — use auto + clear instructions. Always check stop_reason (handle "refusal")
-  before reading content. Enable server-side refusal fallback
-  (betas=["server-side-fallback-2026-07-01"], fallbacks="default") on Opus calls if the SDK
-  version accepts it; otherwise handle refusal explicitly.
+  BUDGET: Claude API credits are scarce. Model per agent from env, chosen by how much
+  judgment the job needs (exact IDs, no date suffixes):
+    ORCHESTRATOR_MODEL = "claude-sonnet-5-5"  (plans + delegates; few turns, short context)
+    AUDITOR_MODEL      = "claude-sonnet-5-5"  (drives the browser; must not get lost)
+    REVIEWER_MODEL     = "claude-sonnet-5-5"  (looks at pixelated pages; safety-relevant)
+    NOTICE_MODEL       = "claude-haiku-5-5"   (polishes a Jinja template; simple)
+  Opus 5.5 ("claude-opus-5-5") only by explicit env override (e.g. the final demo recording).
+  LLM_MODE = live | replay | off (default replay). live records every response to
+  data/llm_cassettes/; replay serves them back with zero API calls; off = agents disabled,
+  deterministic pipeline only. Tests and `make demo` never need live mode.
+  MAX_USD_PER_RUN (default 0.50): sum response.usage x price table after every call and
+  abort the run cleanly when exceeded. Prompt caching on every agent's system prompt + tools.
+  LLM_PROVIDER = anthropic | bedrock | foundry (AnthropicBedrockMantle with "anthropic."-
+  prefixed model IDs / AnthropicFoundry) so cloud credits can pay for Claude if they apply.
+  Sonnet 5.5 / Opus 5.5: never send budget_tokens or thinking:{type:"disabled"} (400); set
+  output_config={"effort": ...} explicitly on every call; never use forced tool_choice
+  any/tool (400) — use auto + strict tools + clear instructions. Always check stop_reason
+  (handle "refusal") before reading content. On the Claude API enable server-side refusal
+  fallback (betas=["server-side-fallback-2026-07-01"], fallbacks="default") on Sonnet/Opus
+  calls if the SDK accepts it; Haiku has no server-side fallback — handle refusal explicitly.
 - Frontend: React + Vite + TypeScript + Tailwind. Server-sent events for live agent timelines.
 
 REPO LAYOUT

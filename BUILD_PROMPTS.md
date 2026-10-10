@@ -5,9 +5,20 @@ How to use this file:
 2. After each version: run the tests, commit, and tag (`git tag v1` …). Only move on once the "Done when" checklist passes.
 3. If you fall behind, follow the **cut-line** at the bottom. v1 + v2 on their own already make a demoable, defensible project.
 
+### Budget profile (no GPU, ~7 GB RAM laptop, ~$100 AWS/Azure credits, little Claude API credit)
+- **Claude models by role:** Sonnet 5.5 for Orchestrator, Auditor and Reviewer (judgment), Haiku 5.5
+  for the Notice agent (template polish). Opus 5.5 only as an explicit override for the final recording.
+- **Pay once, replay forever:** `LLM_MODE=replay` serves recorded responses; record one good live
+  run per scenario. `MAX_USD_PER_RUN` hard-stops a runaway loop.
+- **YOLO training:** Kaggle/Colab free T4 first, laptop CPU overnight second, a cloud GPU VM last
+  (new accounts usually have GPU quota 0 — request it early if you'll need it).
+- **Cloud credits:** first check whether they cover Claude on Bedrock / Foundry (promotional
+  credits often exclude Marketplace models). Otherwise skip cloud deploy; the on-device story
+  is the point.
+
 ### Parallel tracks (team of 3–4)
 - **Person A (core):** v0 → v1 → v2 detectors/decision.
-- **Person B (ML):** as soon as v0 finishes (~hour 2), start YOLO training on the cloud GPU (v2 §1) **in the background**, so training is off the critical path. If training fails, ship the classical detector and keep retrying. The edge-model checkbox needs the ONNX model, so protect this track.
+- **Person B (ML):** as soon as v0 finishes (~hour 2), start YOLO training on a free Kaggle/Colab GPU (v2 §1) **in the background**, so training is off the critical path. If training fails, ship the classical detector and keep retrying. The edge-model checkbox needs the ONNX model, so protect this track.
 - **Person C (web):** React shell (v1 §9) and the mock portal (v3 §1) from hour 2; neither depends on the detectors.
 - **Person D (agents/pitch):** MCP servers (v3 §2–4) against stub scanner functions from hour 4, then agents (v4), demo script, slides.
 
@@ -55,7 +66,7 @@ HARD RULES
 STACK
 - Python 3.11, uv for env management. FastAPI backend. PyMuPDF (fitz) for PDF render/redact.
   OpenCV + NumPy for classical vision. pytesseract + Tesseract (eng + mal traineddata) for OCR.
-  onnxruntime for the edge model. ultralytics YOLOv8n only for training/export (AGPL-3.0 —
+  onnxruntime for the edge model. ultralytics YOLOv8n (CPU-only torch locally) only for training/export (AGPL-3.0 —
   fine for a hackathon, note it in README). reportlab + Faker(en_IN) for synthetic deeds.
 - MCP: official `mcp` Python SDK (FastMCP) for our servers; `npx @playwright/mcp@latest`
   for browser automation.
@@ -63,14 +74,26 @@ STACK
   runner (`client.beta.messages.tool_runner`) and the MCP conversion helpers
   (`from anthropic.lib.tools.mcp import async_mcp_tool`) to hand local stdio MCP server tools
   to Claude. Do NOT use the remote `mcp_servers` connector (our servers are local stdio).
-  Models come from env: ORCHESTRATOR_MODEL (default "claude-opus-5-5"), WORKER_MODEL (default
-  "claude-opus-5-5"; set "claude-haiku-5-5" to save credits). Exact IDs, no date suffixes.
-  Opus 5.5: don't send budget_tokens or thinking:{type:"disabled"} (400); set
-  output_config={"effort": ...} explicitly (default is medium); never use forced tool_choice
-  any/tool (400) — use auto + clear instructions. Always check stop_reason (handle "refusal")
-  before reading content. Enable server-side refusal fallback
-  (betas=["server-side-fallback-2026-07-01"], fallbacks="default") on Opus calls if the SDK
-  version accepts it; otherwise handle refusal explicitly.
+  BUDGET: Claude API credits are scarce. Model per agent from env, chosen by how much
+  judgment the job needs (exact IDs, no date suffixes):
+    ORCHESTRATOR_MODEL = "claude-sonnet-5-5"  (plans + delegates; few turns, short context)
+    AUDITOR_MODEL      = "claude-sonnet-5-5"  (drives the browser; must not get lost)
+    REVIEWER_MODEL     = "claude-sonnet-5-5"  (looks at pixelated pages; safety-relevant)
+    NOTICE_MODEL       = "claude-haiku-5-5"   (polishes a Jinja template; simple)
+  Opus 5.5 ("claude-opus-5-5") only by explicit env override (e.g. the final demo recording).
+  LLM_MODE = live | replay | off (default replay). live records every response to
+  data/llm_cassettes/; replay serves them back with zero API calls; off = agents disabled,
+  deterministic pipeline only. Tests and `make demo` never need live mode.
+  MAX_USD_PER_RUN (default 0.50): sum response.usage x price table after every call and
+  abort the run cleanly when exceeded. Prompt caching on every agent's system prompt + tools.
+  LLM_PROVIDER = anthropic | bedrock | foundry (AnthropicBedrockMantle with "anthropic."-
+  prefixed model IDs / AnthropicFoundry) so cloud credits can pay for Claude if they apply.
+  Sonnet 5.5 / Opus 5.5: never send budget_tokens or thinking:{type:"disabled"} (400); set
+  output_config={"effort": ...} explicitly on every call; never use forced tool_choice
+  any/tool (400) — use auto + strict tools + clear instructions. Always check stop_reason
+  (handle "refusal") before reading content. On the Claude API enable server-side refusal
+  fallback (betas=["server-side-fallback-2026-07-01"], fallbacks="default") on Sonnet/Opus
+  calls if the SDK accepts it; Haiku has no server-side fallback — handle refusal explicitly.
 - Frontend: React + Vite + TypeScript + Tailwind. Server-sent events for live agent timelines.
 
 REPO LAYOUT
@@ -174,7 +197,7 @@ Read CLAUDE.md. Implement v1: the deterministic core plus a minimal UI. No LLMs 
 2. backend/app/core/ocr.py
    - get_words(page) -> list[Word(text, bbox_pt, conf, line_id)].
      If the page has a text layer (PyMuPDF page.get_text("words")) use it; otherwise render
-     at 300 dpi and run pytesseract image_to_data(lang="eng+mal"), mapping pixel bboxes
+     at 250 dpi (laptop budget; cache OCR by page sha256) and run pytesseract image_to_data(lang="eng+mal"), mapping pixel bboxes
      back to PDF points.
    - Return page-level ocr_quality = mean word confidence over alphanumeric words (0–1),
      and a flag text_layer: bool.
@@ -266,17 +289,21 @@ pass. Commit "v1: deterministic core".
 Read CLAUDE.md. Implement v2: on-device ML thumbprint detector fused with the classical one,
 and a System-One decision engine with a typed-question interface.
 
-1. Training (runs on a cloud GPU VM using our credits; also runnable on CPU for a smoke test)
-   - ml/train_yolo.py: YOLOv8n, imgsz 960, class "fingerprint", trained on
-     data/datasets/yolo (from v0). Heavy augmentation: rotation, blur, JPEG, HSV ink
-     shifts, mosaic. Early stopping on val. Log mAP50 and recall.
-   - docs/GPU.md: exact steps for a spot GPU VM on GCP (L4 or T4) or Azure (NC T4), with an
-     image that has CUDA + PyTorch; rsync dataset up, train, rsync best.pt back, SHUT THE VM
-     DOWN (include the command). Note the expected cost as "check the console price
-     before starting".
-   - ml/export_onnx.py: export to ONNX (opset 17, imgsz 960, dynamic=False), then dynamic INT8
-     quantisation with onnxruntime.quantization; save data/models/thumb_det_int8.onnx and
-     the FP32 one. Record file sizes.
+1. Training (no local GPU — free GPU first, CPU fallback, paid VM last)
+   - ml/train_yolo.py: YOLOv8n, class "fingerprint", trained on data/datasets/yolo (from v0).
+     --profile gpu: imgsz 960, epochs 60, batch 16. --profile cpu: imgsz 640, epochs 30,
+     batch 4, workers 2 (fits ~7 GB RAM; ~1–2 h overnight). Heavy augmentation: rotation,
+     blur, JPEG, HSV ink shifts, mosaic. Early stopping on val. Log mAP50 and recall.
+   - ml/kaggle_train.ipynb + docs/TRAINING.md: zip data/datasets/yolo → upload as a Kaggle
+     dataset → run the notebook on a free T4 (Colab works the same) → download best.pt into
+     data/models/. Also a short "paid GPU VM" appendix (AWS g4dn.xlarge spot / Azure NC T4):
+     quota request, rsync up, train, rsync back, SHUT THE VM DOWN (exact command); "check the
+     console price before starting".
+   - Locally `uv sync --extra train` installs CPU-only torch (pyproject pins the PyTorch CPU
+     index) — never pull the multi-GB CUDA wheels onto the laptop.
+   - ml/export_onnx.py: export to ONNX (opset 17, imgsz = training imgsz, dynamic=False), then
+     dynamic INT8 quantisation with onnxruntime.quantization; save
+     data/models/thumb_det_int8.onnx and the FP32 one. Record file sizes.
 
 2. backend/app/core/fp_onnx.py
    - onnxruntime CPU session (no torch at inference time). Letterbox preprocessing, NMS
@@ -391,8 +418,21 @@ deeds that expose thumbprints/Aadhaar.
    - If stop_reason == "refusal", log stop_details and return a structured failure.
    - Emit every step (tool name, short args summary, result summary, timestamps) to an
      asyncio.Queue so the API can stream it over SSE.
+   - Budget plumbing lives here, once, for every agent:
+     * get_client(): LLM_PROVIDER → Anthropic / AnthropicBedrockMantle / AnthropicFoundry.
+     * LLM_MODE: live (call + record request-hash → response JSON in data/llm_cassettes/),
+       replay (serve recorded response; a cache miss is a clear error, never a silent live
+       call), off (raise AgentsDisabled; the deterministic pipeline still works).
+     * Cost meter: per-model price table in settings; after each response add
+       usage.input_tokens / output_tokens / cache_read_input_tokens; abort with a structured
+       "budget_exceeded" result when MAX_USD_PER_RUN is passed; expose totals to the UI.
+     * Per-agent max_turns (default 15) and max_tokens (4096 workers, 8192 orchestrator).
+     * cache_control on the stable system prompt + tool list; log cache_read_input_tokens.
 
 6. agents/auditor.py — Auditor agent (agentic browser)
+   - Model: AUDITOR_MODEL (Sonnet 5.5), effort "low". Page snapshots are the main token
+     cost: prefer browser_snapshot over screenshots for the model, keep max_docs small
+     (default 8), and cap turns.
    - MCP servers: Playwright MCP (`npx @playwright/mcp@latest --headless` for runs,
      headed for the demo) + casestore + scanner.
    - The browser FINDS deed links; it does not need to download them. Add a
@@ -423,9 +463,10 @@ deeds that expose thumbprints/Aadhaar.
 
 9. Tests: MCP servers start and list tools (in-process client); path-traversal rejected;
    allowlist blocks https://example.com; audit chain verifies and detects tampering;
-   bulk_crawl finds all 120 seeded deeds.
+   bulk_crawl finds all 120 seeded deeds; LLM_MODE=replay runs the auditor with zero API
+   calls; budget guard aborts a fake client that overspends.
 
-DONE WHEN: from the UI, auditing "SRO Kottayam 2018–2020, max 15" visibly drives the
+DONE WHEN: from the UI, auditing "SRO Kottayam 2018–2020, max 8" (live once, then replay) visibly drives the
 browser, downloads deeds, and fills the exposure table with counts matching the seed
 ground truth. Commit "v3: MCP + portal audit".
 ```
@@ -438,7 +479,7 @@ ground truth. Commit "v3: MCP + portal audit".
 Read CLAUDE.md. Implement v4: a multi-agent layer on top of v3.
 
 Agents (each = its own tool-runner loop with its own system prompt and MCP tool subset):
-1. Orchestrator (ORCHESTRATOR_MODEL, effort "medium")
+1. Orchestrator (ORCHESTRATOR_MODEL = Sonnet 5.5, effort "medium")
    - Input: a mission, e.g. "Audit SRO Kottayam and Ettumanoor 2018–2020, remediate, and
      prepare notices" or "Process today's upload batch in data/inbox/new".
    - Tools: delegate_audit(sro, years, max_docs), delegate_review(doc_ids),
@@ -446,9 +487,10 @@ Agents (each = its own tool-runner loop with its own system prompt and MCP tool 
      are Python @beta_async_tool functions that run the sub-agent and return its summary.
    - Produces a final mission report (markdown) saved via casestore.
 
-2. Auditor (WORKER_MODEL, effort "low") — from v3.
+2. Auditor (AUDITOR_MODEL = Sonnet 5.5, effort "low") — from v3.
 
-3. Reviewer (WORKER_MODEL, effort "medium") — the only place an LLM looks at pages
+3. Reviewer (REVIEWER_MODEL = Sonnet 5.5, effort "medium") — the only place an LLM looks at pages
+   - Send only BLOCK_FOR_REVIEW / low-confidence pages, downscaled to ~1000 px long side.
    - Input: pages with decision BLOCK_FOR_REVIEW or single-source low-confidence findings.
    - Tools: scanner.get_review_view (pixelated page image + bboxes), policy.get_policy,
      casestore.record_scan.
@@ -456,11 +498,14 @@ Agents (each = its own tool-runner loop with its own system prompt and MCP tool 
      "confirm". It CANNOT remove a redaction or mark a page safe: enforce in code by
      accepting only escalation actions from its structured output (use a strict tool
      with an enum of allowed actions; additionalProperties false). Forced tool_choice is
-     not available on Opus 5.5, so the model may answer in prose instead. Treat "no valid tool
+     not available on Sonnet/Opus 5.5, so the model may answer in prose instead. Treat "no valid tool
      call" as SEND_TO_HUMAN, so the outcome is still fail-closed.
    - Writes a short human-readable review card per page for the clerk.
 
-4. Notice agent (WORKER_MODEL, effort "medium")
+4. Notice agent (NOTICE_MODEL = Haiku 5.5, effort "low")
+   - Template-first: Jinja templates in agents/prompts/notices/ (en + ml) produce a complete
+     draft with no LLM; the agent only fills gaps and polishes wording. LLM_MODE=off still
+     yields usable notices.
    - Drafts (never sends): (a) a takedown/masking request to the registration department
      listing affected doc numbers by SRO/year, counts, and the remediation offered
      (re-publish redacted versions + certificates); (b) a citizen advisory in Malayalam AND
@@ -486,10 +531,11 @@ Tests
 - Fake/mocked Anthropic client tests for: orchestrator delegates correctly; reviewer's
   attempt to "remove redaction" is rejected by the code guard; notice drafts contain no
   full Aadhaar numbers (regex check) and no fingerprint images.
-- One live end-to-end test behind an env flag (RUN_LIVE=1) on 5 docs.
+- One live end-to-end test behind an env flag (RUN_LIVE=1) on 3 docs, with
+  MAX_USD_PER_RUN=0.50; it also records the cassettes that replay mode and `make demo` use.
 
 DONE WHEN: a single mission from Mission control runs Auditor → Reviewer → Notice end-to-end
-on 10–15 deeds in under ~4 minutes, shows swimlanes live, and produces a mission report,
+on 8 deeds in under ~4 minutes (live, cost shown in the UI) and identically in replay mode, shows swimlanes live, and produces a mission report,
 review cards and bilingual notice drafts. Commit "v4: multi-agent".
 ```
 
@@ -504,7 +550,9 @@ Read CLAUDE.md. Implement v5: make it demo-proof.
    real checksum, so some may collide with real ones) a BORN-DIGITAL "hero" deed so the
    wow moment is genuinely sub-second, plus a scanned deed as the second example.
    It seeds the portal + the hero deed (2 thumbprints, 1 Aadhaar,
-   1 masked Aadhaar, 1 decoy number, 1 rubber stamp) and a scripted mission. Pre-warms the ONNX
+   1 masked Aadhaar, 1 decoy number, 1 rubber stamp) and a scripted mission. The mission
+   runs with LLM_MODE=replay by default (zero API cost, works offline); `make demo-live`
+   runs it live with the cost meter visible. Pre-warms the ONNX
    session and the prompt cache. A "Reset demo" button.
 2. The wow moment, polished: on the Upload page, an "Airplane-mode proof" panel — big
    timer, model name/size, "0 bytes sent" counter (the backend counts its own outbound
@@ -514,7 +562,7 @@ Read CLAUDE.md. Implement v5: make it demo-proof.
    judge can see the numbers, with the caveat "synthetic test set".
 4. Robustness: big PDFs (50 pages) stream progress per page; corrupt PDF → clear error;
    password-protected PDF → BLOCK_FOR_REVIEW with reason; concurrency limit.
-5. Deploy (optional, uses credits): Dockerfiles for api, portal, web; docker-compose for
+5. Deploy (optional — skip unless credits are spare; demo runs locally): Dockerfiles for api, portal, web; docker-compose for
    local; deploy api + web to Cloud Run or Azure Container Apps with the mock portal protected
    by basic auth (synthetic data still shouldn't be public). The on-device story stays
    primary — the cloud deploy is only a public demo mirror.
@@ -535,7 +583,7 @@ Commit "v5: demo-ready" and tag v5.
 ---
 
 ## Cut-line (drop in this order if behind)
-1. v5 stretch (in-browser ONNX) → 2. cloud deploy → 3. Notice agent → 4. Reviewer agent
+1. v5 stretch (in-browser ONNX) → 2. cloud deploy (skip by default on this budget) → 3. Notice agent → 4. Reviewer agent
 (keep the human review queue without the LLM) → 5. Jev backend (rules only) → 6. LLM Auditor (keep
 bulk_crawl + Playwright, show it as "agentic system use" only if an LLM drives at least one search).
 

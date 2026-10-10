@@ -28,10 +28,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-train = ["ultralytics"]
+train = ["ultralytics", "torch", "torchvision"]
 
 [tool.uv]
 package = false
+
+# No GPU on the dev laptop: CPU-only torch wheels (~200 MB instead of multi-GB CUDA builds).
+# Train on a GPU (Kaggle/Colab) with the notebook in ml/, not with this env.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

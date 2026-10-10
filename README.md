@@ -38,6 +38,16 @@ placeholders until v1/v3.
   ink colours and blur/scan levels (`synth/styles.py`).
 - Ground-truth format: [`docs/DATA_CONTRACT.md`](docs/DATA_CONTRACT.md).
 
+## Running on a budget
+
+Designed for a laptop with no GPU and very little Claude API credit:
+- Models per agent (`.env`): Sonnet 5.5 for Orchestrator, Auditor and Reviewer; Haiku 5.5 for
+  the Notice agent. Opus 5.5 only by explicit override.
+- `LLM_MODE=replay` (default) replays recorded agent runs at zero API cost; `live` records them;
+  `off` disables agents (the detect → redact → verify pipeline never needs an LLM).
+- `MAX_USD_PER_RUN` hard-stops any agent run that exceeds the budget.
+- `uv sync --extra train` installs CPU-only torch. Train YOLO on a free Kaggle/Colab GPU.
+
 ## Notes and licences
 
 - Fonts in `synth/fonts/` are Noto Sans / Noto Sans Malayalam under the SIL OFL 1.1
