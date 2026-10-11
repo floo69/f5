@@ -1,0 +1,136 @@
+[
+ {
+  "key": "hotel",
+  "label": "Hotel Check-in",
+  "masks": [
+   "Aadhaar first 8 digits",
+   "QR / barcode",
+   "PAN",
+   "Thumb impressions"
+  ],
+  "keeps": [
+   "Photo",
+   "Name",
+   "Address",
+   "DOB"
+  ],
+  "default_days": 2,
+  "max_days": 7,
+  "not_valid_for": [
+   "BANKING",
+   "SIM",
+   "LOANS"
+  ]
+ },
+ {
+  "key": "xerox",
+  "label": "Xerox / Print Shop",
+  "masks": [
+   "Every number (Aadhaar, PAN, DOB, PIN, phone)",
+   "QR / barcode",
+   "Thumb impressions"
+  ],
+  "keeps": [
+   "Photo",
+   "Name"
+  ],
+  "default_days": 1,
+  "max_days": 1,
+  "not_valid_for": [
+   "BANKING",
+   "SIM",
+   "LOANS",
+   "HOTEL"
+  ]
+ },
+ {
+  "key": "sim",
+  "label": "SIM / Telecom",
+  "masks": [
+   "Aadhaar first 8 digits",
+   "PAN",
+   "Thumb impressions"
+  ],
+  "keeps": [
+   "Photo",
+   "Name",
+   "Address",
+   "DOB",
+   "QR (offline e-KYC)"
+  ],
+  "default_days": 3,
+  "max_days": 7,
+  "not_valid_for": [
+   "BANKING",
+   "LOANS"
+  ]
+ },
+ {
+  "key": "rental",
+  "label": "Rental / Landlord",
+  "masks": [
+   "Aadhaar first 8 digits",
+   "QR / barcode",
+   "PAN",
+   "DOB",
+   "Thumb impressions"
+  ],
+  "keeps": [
+   "Photo",
+   "Name",
+   "Address"
+  ],
+  "default_days": 30,
+  "max_days": 90,
+  "not_valid_for": [
+   "BANKING",
+   "SIM",
+   "LOANS"
+  ]
+ },
+ {
+  "key": "school",
+  "label": "School Admission",
+  "masks": [
+   "Aadhaar first 8 digits",
+   "QR / barcode",
+   "PAN",
+   "Thumb impressions"
+  ],
+  "keeps": [
+   "Photo",
+   "Name",
+   "DOB",
+   "Address"
+  ],
+  "default_days": 30,
+  "max_days": 90,
+  "not_valid_for": [
+   "BANKING",
+   "SIM",
+   "LOANS"
+  ]
+ },
+ {
+  "key": "bank_loan",
+  "label": "Bank Loan",
+  "masks": [
+   "Aadhaar first 8 digits",
+   "Thumb impressions"
+  ],
+  "keeps": [
+   "Photo",
+   "Name",
+   "DOB",
+   "Address",
+   "PAN",
+   "QR"
+  ],
+  "default_days": 15,
+  "max_days": 30,
+  "not_valid_for": [
+   "SIM",
+   "HOTEL"
+  ]
+ }
+]

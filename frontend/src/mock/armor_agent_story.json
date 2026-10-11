@@ -1,0 +1,136 @@
+{
+ "audit": [
+  {
+   "agent": "orchestrator",
+   "type": "start",
+   "say": "Starting a scan of the demo hotel website.",
+   "step": "scan"
+  },
+  {
+   "agent": "auditor",
+   "type": "tool",
+   "say": "Opening the hotel's guest-upload page and listing every file on it.",
+   "step": "scan",
+   "tool": "list_page_assets"
+  },
+  {
+   "agent": "auditor",
+   "type": "tool",
+   "say": "Looking inside each image for ID cards and thumbprints.",
+   "step": "scan",
+   "tool": "scan_url"
+  },
+  {
+   "agent": "auditor",
+   "type": "tool",
+   "say": "Found an ID card that anyone on the internet can open.",
+   "step": "found",
+   "finding": {
+    "page_url": "http://localhost:8100/uploads/kyc_101.jpg",
+    "kinds": [
+     "Aadhaar number",
+     "QR code",
+     "Thumbprint"
+    ],
+    "masked": [
+     "XXXX XXXX 0124"
+    ],
+    "thumb_url": "mock:1"
+   }
+  },
+  {
+   "agent": "auditor",
+   "type": "tool",
+   "say": "Found a second exposed ID photo on the check-in page.",
+   "step": "found",
+   "finding": {
+    "page_url": "http://localhost:8100/uploads/kyc_102.jpg",
+    "kinds": [
+     "Aadhaar number",
+     "Photo"
+    ],
+    "masked": [
+     "XXXX XXXX 7781"
+    ],
+    "thumb_url": "mock:2"
+   }
+  },
+  {
+   "agent": "auditor",
+   "type": "tool",
+   "say": "Found a third exposed copy in the guest register PDF.",
+   "step": "found",
+   "finding": {
+    "page_url": "http://localhost:8100/register/guests.pdf",
+    "kinds": [
+     "Aadhaar number",
+     "Thumbprint"
+    ],
+    "masked": [
+     "XXXX XXXX 3305"
+    ],
+    "thumb_url": "mock:3"
+   }
+  },
+  {
+   "agent": "auditor",
+   "type": "handover",
+   "say": "Your turn: to lock your biometrics, enter the OTP that UIDAI sends to your phone. We never see it.",
+   "step": "lock"
+  },
+  {
+   "agent": "reviewer",
+   "type": "result",
+   "say": "Checking each find against the rules. Anything unclear is sent to a person.",
+   "step": "review"
+  },
+  {
+   "agent": "notice",
+   "type": "result",
+   "say": "Writing a takedown notice you can send to the website owner.",
+   "step": "notice"
+  },
+  {
+   "agent": "orchestrator",
+   "type": "done",
+   "say": "All done. 3 exposed copies found and a takedown notice is ready.",
+   "step": "done",
+   "result": {
+    "summary": "3 exposed identity documents found.",
+    "exposed_count": 3,
+    "risk": "high",
+    "escalated": true,
+    "cost_usd": 0,
+    "mode": "demo",
+    "notice": "# Takedown notice (draft)\n\nTo: The owner of the demo hotel website\n\nSubject: Please remove exposed identity documents\n\nThree identity documents belonging to guests can be opened by anyone on your website:\n\n1. /uploads/kyc_101.jpg\n2. /uploads/kyc_102.jpg\n3. /register/guests.pdf\n\nUnder the Digital Personal Data Protection Act, 2023 you must protect personal data you hold. Please take these files down within 24 hours and confirm in writing.\n\nThis is a draft. Please read it before sending. It is not legal advice.\n"
+   }
+  }
+ ],
+ "forgery": [
+  {
+   "agent": "orchestrator",
+   "type": "start",
+   "say": "Looking at the copy that was edited.",
+   "step": "review"
+  },
+  {
+   "agent": "reviewer",
+   "type": "review",
+   "say": "Part of the picture was changed after the copy was sealed. The marked area covers the photo, so this copy should not be trusted.",
+   "step": "review",
+   "attack_type": "swap_photo"
+  },
+  {
+   "agent": "orchestrator",
+   "type": "done",
+   "say": "The copy was edited, so it fails the check. Ask the owner for a fresh copy.",
+   "step": "done",
+   "result": {
+    "summary": "The photo area was swapped after sealing. Do not accept this copy.",
+    "escalated": true,
+    "cost_usd": 0,
+    "mode": "demo"
+   }
+  }
+ ]
+}

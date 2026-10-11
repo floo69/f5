@@ -17,7 +17,7 @@ export default function PageViewer({ jobId, page, mock }: { jobId: string; page:
   const max = Math.max(1, ...STAGES.map(([k]) => page.timings_ms[k] ?? 0))
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label={`Page ${page.page + 1} detail`}>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-label={`Page ${page.page + 1} detail`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="mr-2 text-base font-semibold text-slate-900">Page {page.page + 1}</h3>
@@ -34,7 +34,7 @@ export default function PageViewer({ jobId, page, mock }: { jobId: string; page:
         </label>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-6">
+      <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2">
         {(['before', 'after'] as const).map((v) => (
           <figure key={v}>
             <figcaption className="mb-2 text-sm font-medium text-slate-700">
@@ -47,7 +47,7 @@ export default function PageViewer({ jobId, page, mock }: { jobId: string; page:
         ))}
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-6 border-t border-slate-100 pt-5">
+      <div className="mt-6 grid grid-cols-1 gap-6 border-t sm:grid-cols-2 border-slate-100 pt-5">
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Decision</h4>
           <ul className="mt-2 space-y-1.5 text-sm text-slate-700">

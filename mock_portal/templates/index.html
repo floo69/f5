@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}Sunrise Stays guest archive{% endblock %}
+{% block body %}<h1>Sunrise Stays, Goa — Guest KYC archive</h1>
+<p>Public listing of guest ID uploads (October 2026).</p>
+<table><tr><th>Guest</th><th>Document</th><th></th></tr>
+{% for gid, g in guests.items() %}<tr><td>Guest #{{ gid }}</td><td>{{ g[1].replace('_', ' ') }}</td>
+<td><a href="/guests/{{ gid }}">View record</a></td></tr>{% endfor %}</table>
+<p><a href="/uidai-mock">Mock UIDAI services</a></p>{% endblock %}

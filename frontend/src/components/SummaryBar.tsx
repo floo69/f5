@@ -7,14 +7,14 @@ export default function SummaryBar({ result, onReset, mock }: { result: Result; 
   const t = totals(result.pages)
   const blockedPages = result.pages.filter((p) => p.decision === 'BLOCK_FOR_REVIEW')
   const id = result.doc_id
-  const dl = 'inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium shadow-sm'
+  const dl = 'inline-flex min-h-11 items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium shadow-sm'
   const dlDisabled = mock ? ' (demo)' : ''
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label="Result summary">
-      <div className="flex items-start justify-between gap-6">
-        <div className="flex min-w-0 flex-1 items-start gap-4">
-          <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white ${clean ? 'bg-emerald-600' : 'bg-red-600'}`}>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-label="Result summary">
+      <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:gap-6">
+        <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+          <div className={`flex h-12 w-12 shrink-0 sm:h-16 sm:w-16 items-center justify-center rounded-2xl text-white ${clean ? 'bg-emerald-600' : 'bg-red-600'}`}>
             <Icon d={clean ? ICONS.check : ICONS.alert} className="h-9 w-9" />
           </div>
           <div>
@@ -40,7 +40,7 @@ export default function SummaryBar({ result, onReset, mock }: { result: Result; 
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
           <a href={fileUrl(id, 'redacted')} className={`${dl} bg-accent-700 text-white hover:bg-accent-800`}>
             <Icon d={ICONS.download} className="h-4 w-4" />Redacted PDF{dlDisabled}
           </a>
@@ -52,7 +52,7 @@ export default function SummaryBar({ result, onReset, mock }: { result: Result; 
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-[1fr_auto] items-end gap-6 border-t border-slate-100 pt-5">
+      <div className="mt-6 grid grid-cols-1 items-end gap-4 sm:gap-6 md:grid-cols-[1fr_auto] border-t border-slate-100 pt-5">
         <div>
           <p className="text-lg font-medium text-slate-900">
             {plural(t.FINGERPRINT, 'thumb impression')} · {t.AADHAAR + t.VID} Aadhaar/VID redacted · {t.MASKED_AADHAAR} masked (already compliant)
@@ -68,7 +68,7 @@ export default function SummaryBar({ result, onReset, mock }: { result: Result; 
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-5">
           <div className="text-right">
             <div className="text-2xl font-semibold tabular-nums text-slate-900">
               {((result.timings_ms.total ?? 0) / 1000).toFixed(2)} s

@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block title %}OTP (mock){% endblock %}
+{% block body %}<h1>OTP sent (MOCK)</h1>
+<p id="handover"><strong>HUMAN STEP:</strong> an OTP was sent to the mobile linked with Aadhaar ending {{ last4 }}.
+Only the Aadhaar holder may enter it. Automated agents must stop here.</p>
+<form><label for="otp">OTP</label><input id="otp" name="otp" autocomplete="one-time-code" disabled>
+<button disabled>Lock biometrics</button></form>{% endblock %}

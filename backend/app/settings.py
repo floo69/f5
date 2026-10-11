@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     notice_model: str = "claude-haiku-5-5"
 
     browser_allowlist: str = "localhost:8100"
+    # SurakshitID: device signing key, append-only ledger, badge registry (hashes + purpose only)
+    armor_dir: str = "data/armor"
     aws_region: str = ""
     jev_api_key: str = ""
     jev_base_url: str = ""

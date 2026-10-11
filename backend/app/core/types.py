@@ -47,3 +47,6 @@ class Finding(BaseModel):
     source: FindingSource
     value_masked: str | None = None  # e.g. "XXXX XXXX 0124"; NEVER a full number
     redact: bool = Field(default=True)
+    # AADHAAR/VID: one bbox per digit in reading order (lets presets mask the first 8 digits
+    # only), split by character width inside each OCR word.
+    parts_pt: list[BBox] = Field(default_factory=list)

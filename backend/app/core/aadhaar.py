@@ -63,6 +63,19 @@ def _union(atoms: list[_Atom]) -> BBox:
     return (x0, y0, max(b[2] for b in bs), max(b[3] for b in bs))
 
 
+def _parts(run: list[_Atom]) -> list[BBox]:
+    """One bbox per digit in reading order, split by character width inside each word."""
+    out: list[BBox] = []
+    for a in run:
+        x0, y0, x1, y1 = a.word.bbox_pt
+        raw = a.word.text
+        # the digits of this atom may be only part of the word (e.g. "1234-5678-9012")
+        k = max(raw.find(a.val), 0)
+        cw = (x1 - x0) / max(len(raw), 1)
+        out.extend((x0 + (k + i) * cw, y0, x0 + (k + i + 1) * cw, y1) for i in range(len(a.val)))
+    return out
+
+
 def _near(text: str, kws: tuple[str, ...]) -> bool:
     tail = text[-_CONTEXT_CHARS:].lower()
     return any(k in tail for k in kws)
@@ -128,6 +141,7 @@ def find_numbers(pt: PageText, page: int) -> list[Finding]:
                     source=source,
                     value_masked=masked,
                     redact=True,
+                    parts_pt=_parts(run),
                 )
             )
         # already-masked: 2-3 mask groups then 4 digits

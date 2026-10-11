@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block title %}Guest #{{ gid }}{% endblock %}
+{% block body %}<h1>Guest #{{ gid }}</h1><p>Uploaded ID ({{ kind.replace('_', ' ') }}):</p>
+<img src="/uploads/kyc_{{ gid }}.jpg" alt="Guest {{ gid }} ID upload">
+<p><a href="/">Back to archive</a></p>{% endblock %}

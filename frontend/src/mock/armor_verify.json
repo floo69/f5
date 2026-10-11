@@ -1,0 +1,28 @@
+{
+ "status": "FORGERY_DETECTED",
+ "armor_id": "SKID-7Q2K-9F3M",
+ "purpose": "HOTEL CHECK-IN ONLY",
+ "recipient": "Taj Hotel, Goa",
+ "expires_at": "2026-10-13T10:42:07Z",
+ "signature_ok": true,
+ "width": 1011,
+ "height": 638,
+ "tile_px": 32,
+ "altered_regions": [
+  [
+   64,
+   128,
+   320,
+   192
+  ],
+  [
+   608,
+   288,
+   960,
+   352
+  ]
+ ],
+ "altered_tiles": 22,
+ "total_tiles": 640,
+ "detail": "22 of 640 tiles differ from the sealed hashes; signature itself is valid."
+}

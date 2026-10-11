@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import time
-from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
@@ -17,22 +16,14 @@ import pymupdf
 from pydantic import BaseModel
 
 from backend.app.core import aadhaar, fp_classical, ocr
+from backend.app.core.decision import LABELS, decide_page
 from backend.app.core.redact import redact_pdf
-from backend.app.core.types import REDACT_TYPES, Finding, PageText
+from backend.app.core.types import Finding, PageText
 from backend.app.core.verify import Verification, verify_pdf
 
 FP_DPI = 200
 OCR_DPI = 250
-MIN_OCR_QUALITY = 0.55
 DETECTOR_VERSIONS = {"aadhaar": "1.0", "fp_classical": "1.0", "pipeline": "1.0"}
-
-LABELS = {
-    "FINGERPRINT": ("thumb impression", "thumb impressions"),
-    "AADHAAR": ("Aadhaar number", "Aadhaar numbers"),
-    "VID": ("Aadhaar VID", "Aadhaar VIDs"),
-    "MASKED_AADHAAR": ("masked Aadhaar (already compliant)", "masked Aadhaar (already compliant)"),
-}
-
 
 class PageResult(BaseModel):
     page: int
@@ -61,20 +52,6 @@ class Result(BaseModel):
 def _gray(page: pymupdf.Page, dpi: int) -> np.ndarray:
     pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
     return np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width).copy()
-
-
-def _decide(findings: list[Finding], text_layer: bool, ocr_quality: float) -> tuple[str, list[str]]:
-    """Temporary v1 rule; v2 replaces it with the System-One decision engine."""
-    counts = Counter(f.type for f in findings)
-    reasons = [f"{n} {LABELS[t][n != 1]}" for t, n in sorted(counts.items(), key=lambda kv: kv[0])]
-    if not text_layer and ocr_quality < MIN_OCR_QUALITY:
-        return "BLOCK_FOR_REVIEW", [
-            f"OCR quality {ocr_quality:.2f} too low to prove absence",
-            *reasons,
-        ]
-    if any(f.redact and f.type in REDACT_TYPES for f in findings):
-        return "REDACT_AND_PUBLISH", reasons
-    return "PUBLISH", reasons or ["nothing sensitive found"]
 
 
 def process_pdf(
@@ -114,7 +91,7 @@ def process_pdf(
         for i, fut in enumerate(futures):
             pt, findings, tms = fut.result()
             p = pages[i]
-            decision, reasons = _decide(findings, pt.text_layer, pt.ocr_quality)
+            decision, reasons = decide_page(findings, pt.text_layer, pt.ocr_quality)
             all_findings.extend(findings)
             page_results.append(
                 PageResult(

@@ -1,0 +1,224 @@
+{
+ "armor_id": "SKID-7Q2K-9F3M",
+ "decision": "ARMOR_AND_ISSUE",
+ "reasons": [
+  "All masks verified at 0x00",
+  "Re-scan found no Aadhaar, PAN, QR or thumb impression"
+ ],
+ "decision_us": 40,
+ "preset": {
+  "key": "hotel",
+  "label": "Hotel Check-in",
+  "masks": [
+   "Aadhaar first 8 digits",
+   "QR / barcode",
+   "PAN",
+   "Thumb impressions"
+  ],
+  "keeps": [
+   "Photo",
+   "Name",
+   "Address",
+   "DOB"
+  ],
+  "default_days": 2,
+  "max_days": 7,
+  "not_valid_for": [
+   "BANKING",
+   "SIM",
+   "LOANS"
+  ]
+ },
+ "recipient": "Taj Hotel, Goa",
+ "issued_at": "2026-10-11T10:42:07Z",
+ "expires_at": "2026-10-13T10:42:07Z",
+ "watermark_text": "FOR TAJ HOTEL, GOA HOTEL CHECK-IN ONLY \u00b7 11 OCT 2026 \u2013 13 OCT 2026 \u00b7 NOT VALID FOR BANKING, SIM, LOANS",
+ "preprocess": {
+  "doc_kind": "id_card",
+  "quad_found": true,
+  "rotation_deg": -2.4,
+  "blur_score": 312.5,
+  "blur_ok": true,
+  "glare_fraction": 0.021,
+  "shadow_corrected": true,
+  "metadata_removed": [
+   "EXIF:Make",
+   "EXIF:Model",
+   "EXIF:DateTime",
+   "EXIF:GPSInfo",
+   "EXIF:Software"
+  ],
+  "width": 1011,
+  "height": 638,
+  "dpi": 300
+ },
+ "ocr_quality": 0.93,
+ "findings": [
+  {
+   "type": "AADHAAR",
+   "bbox_px": [
+    300,
+    470,
+    720,
+    520
+   ],
+   "action": "MASK_PARTIAL",
+   "masked_px": [
+    [
+     300,
+     470,
+     560,
+     520
+    ]
+   ],
+   "value_masked": "XXXX XXXX 0124",
+   "confidence": 0.99,
+   "source": "ocr"
+  },
+  {
+   "type": "QR",
+   "bbox_px": [
+    790,
+    60,
+    960,
+    230
+   ],
+   "action": "MASK",
+   "masked_px": [
+    [
+     790,
+     60,
+     960,
+     230
+    ]
+   ],
+   "value_masked": null,
+   "confidence": 0.97,
+   "source": "classical"
+  },
+  {
+   "type": "FINGERPRINT",
+   "bbox_px": [
+    820,
+    400,
+    960,
+    540
+   ],
+   "action": "MASK",
+   "masked_px": [
+    [
+     820,
+     400,
+     960,
+     540
+    ]
+   ],
+   "value_masked": null,
+   "confidence": 0.88,
+   "source": "classical"
+  },
+  {
+   "type": "FACE",
+   "bbox_px": [
+    50,
+    150,
+    260,
+    400
+   ],
+   "action": "KEEP",
+   "masked_px": [],
+   "value_masked": null,
+   "confidence": 0.95,
+   "source": "classical"
+  },
+  {
+   "type": "DOB",
+   "bbox_px": [
+    300,
+    300,
+    520,
+    340
+   ],
+   "action": "KEEP",
+   "masked_px": [],
+   "value_masked": "01/01/1990",
+   "confidence": 0.9,
+   "source": "ocr"
+  }
+ ],
+ "masks_px": [
+  [
+   300,
+   470,
+   560,
+   520
+  ],
+  [
+   790,
+   60,
+   960,
+   230
+  ],
+  [
+   820,
+   400,
+   960,
+   540
+  ]
+ ],
+ "verification": {
+  "status": "pass",
+  "checks": [
+   {
+    "name": "masks_zero",
+    "ok": true,
+    "detail": "3 masks, max == 0"
+   },
+   {
+    "name": "no_metadata",
+    "ok": true,
+    "detail": "PNG chunks IHDR/IDAT/IEND only"
+   },
+   {
+    "name": "rescan_no_tokens",
+    "ok": true,
+    "detail": "no Aadhaar/VID/PAN/QR/thumb found"
+   },
+   {
+    "name": "single_image_pdf",
+    "ok": true,
+    "detail": "1 image, 0 text chars"
+   }
+  ]
+ },
+ "badge": {
+  "v": 1,
+  "armor_id": "SKID-7Q2K-9F3M",
+  "preset": "hotel",
+  "recipient": "Taj Hotel, Goa",
+  "purpose": "HOTEL CHECK-IN ONLY",
+  "issued_at": "2026-10-11T10:42:07Z",
+  "expires_at": "2026-10-13T10:42:07Z",
+  "width": 1011,
+  "height": 638,
+  "tile_px": 32,
+  "sha256": "9c1f0a7be2d44a8f6b03d51c77e9a2f0a1b8c3d4e5f60718293a4b5c6d7e8f90",
+  "tiles_root": "4be7d2a91c05f3e86a7d0b19c2e4f5a60718293a4b5c6d7e8f9012a3b4c5d6e7f",
+  "prev_hash": "0000a1b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f",
+  "block_hash": "00c4d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0",
+  "ledger_index": 17,
+  "public_key": "ed25519:3f1a9c0b7d5e2468a1c3e5f7092b4d6e8a0c2e4f61739b5d7f9a1c3e5b7d9f02",
+  "signature": "a7c1e9035bd2f4687a90c1d3e5f70a2b4c6d8e0f13579bdf02468ace13579bdfa7c1e9035bd2f4687a90c1d3e5f70a2b4c6d8e0f13579bdf02468ace13579bdf"
+ },
+ "timings_ms": {
+  "capture": 4.1,
+  "preprocess": 88.3,
+  "detect": 142.7,
+  "decide": 0.04,
+  "destroy": 3.2,
+  "watermark": 7.9,
+  "verify": 96.4,
+  "seal": 5.6,
+  "total": 348.2
+ }
+}

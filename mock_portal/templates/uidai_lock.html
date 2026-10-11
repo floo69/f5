@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}Lock biometrics (mock){% endblock %}
+{% block body %}<h1>Lock / Unlock Biometrics (MOCK)</h1>
+{% if error %}<p role="alert" style="color:#b91c1c">{{ error }}</p>{% endif %}
+<form method="post" action="/uidai-mock/lock">
+<label for="uid_last4">Last 4 digits of Aadhaar</label><input id="uid_last4" name="uid_last4" inputmode="numeric" maxlength="4">
+<label for="captcha">Captcha: <strong>K7Q2X</strong></label><input id="captcha" name="captcha">
+<button type="submit">Send OTP</button></form>{% endblock %}

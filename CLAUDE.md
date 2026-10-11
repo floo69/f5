@@ -96,3 +96,5 @@ thumbshield/
 
 ## Status
 - v0: scaffold + synthetic data generators (done).
+- v1–v4: deed redaction, SurakshitID armor (docs/ARMOR_CONTRACT.md), MCP servers, mock portal, agents (done; demo: docs/DEMO.md).
+- mcp 2.x is installed: FastMCP is `mcp.server.mcpserver.MCPServer`.

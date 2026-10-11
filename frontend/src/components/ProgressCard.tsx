@@ -11,7 +11,7 @@ export default function ProgressCard({ job, filename }: { job: Job | null; filen
         ? `Scanning page ${Math.min(done + 1, total)} of ${total}…`
         : 'Processing…'
   return (
-    <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+    <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
       <h2 className="text-lg font-semibold text-slate-900">Processing {filename}</h2>
       <p className="mt-1 text-sm text-slate-500" role="status">
         {text}

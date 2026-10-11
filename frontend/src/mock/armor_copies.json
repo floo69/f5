@@ -1,0 +1,42 @@
+[
+ {
+  "armor_id": "SKID-7Q2K-9F3M",
+  "preset": "hotel",
+  "preset_label": "Hotel Check-in",
+  "recipient": "Taj Hotel, Goa",
+  "purpose": "HOTEL CHECK-IN ONLY",
+  "issued_ago_h": 3,
+  "valid_h": 48,
+  "status": "active"
+ },
+ {
+  "armor_id": "SKID-4D8N-2XWB",
+  "preset": "sim",
+  "preset_label": "SIM / Telecom",
+  "recipient": "Airtel Store, Kochi",
+  "purpose": "SIM / TELECOM ONLY",
+  "issued_ago_h": 20,
+  "valid_h": 72,
+  "status": "active"
+ },
+ {
+  "armor_id": "SKID-J29C-5PLA",
+  "preset": "xerox",
+  "preset_label": "Xerox / Print Shop",
+  "recipient": "Sharma Xerox",
+  "purpose": "XEROX / PRINT SHOP ONLY",
+  "issued_ago_h": 90,
+  "valid_h": 24,
+  "status": "active"
+ },
+ {
+  "armor_id": "SKID-M3VT-8RQE",
+  "preset": "rental",
+  "preset_label": "Rental / Landlord",
+  "recipient": "Mr. Iyer (landlord)",
+  "purpose": "RENTAL / LANDLORD ONLY",
+  "issued_ago_h": 240,
+  "valid_h": 720,
+  "status": "revoked"
+ }
+]

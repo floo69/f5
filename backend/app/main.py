@@ -22,6 +22,8 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
+from backend.app.api.agents import router as agents_router
+from backend.app.api.armor import router as armor_router
 from backend.app.core.report import certificate_dict, certificate_pdf
 from backend.app.pipeline import process_pdf
 
@@ -41,11 +43,13 @@ SAMPLES = {
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    log.warning("ThumbShield running locally — no document leaves this machine")
+    log.warning("SurakshitID / ThumbShield running locally — no document leaves this machine")
     yield
 
 
-app = FastAPI(title="ThumbShield API", lifespan=lifespan)
+app = FastAPI(title="SurakshitID + ThumbShield API", lifespan=lifespan)
+app.include_router(armor_router)
+app.include_router(agents_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],

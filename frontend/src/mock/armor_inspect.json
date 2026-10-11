@@ -1,0 +1,63 @@
+{
+ "masks": [
+  {
+   "bbox_px": [
+    300,
+    470,
+    560,
+    520
+   ],
+   "pixels": 13000,
+   "min": 0,
+   "max": 0,
+   "unique_values": 1,
+   "entropy_bits": 0.0,
+   "hex_sample": "00 00 00 00 00 00 00 00 00 00 00 00 \u2026"
+  },
+  {
+   "bbox_px": [
+    790,
+    60,
+    960,
+    230
+   ],
+   "pixels": 28900,
+   "min": 0,
+   "max": 0,
+   "unique_values": 1,
+   "entropy_bits": 0.0,
+   "hex_sample": "00 00 00 00 00 00 00 00 00 00 00 00 \u2026"
+  },
+  {
+   "bbox_px": [
+    820,
+    400,
+    960,
+    540
+   ],
+   "pixels": 19600,
+   "min": 0,
+   "max": 0,
+   "unique_values": 1,
+   "entropy_bits": 0.0,
+   "hex_sample": "00 00 00 00 00 00 00 00 00 00 00 00 \u2026"
+  }
+ ],
+ "pdf": {
+  "text_chars": 0,
+  "text_sample": "",
+  "metadata": {},
+  "images": 1,
+  "annotations": 0,
+  "pages": 1
+ },
+ "png": {
+  "chunks": [
+   "IHDR",
+   "IDAT",
+   "IEND"
+  ],
+  "exif": false
+ },
+ "brightened_mask_max": 0
+}
