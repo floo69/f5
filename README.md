@@ -1,16 +1,18 @@
-# ThumbShield
+# SurakshitID (सुरक्षित ID)
 
-A defensive privacy tool for Indian land-registration documents. Fraudsters have copied thumb
-impressions from published sale deeds to clone fingerprints and drain Aadhaar-linked bank
-accounts through AePS. ThumbShield finds thumb impressions and Aadhaar numbers in deed PDFs and
-truly redacts them before publication, on the clerk's own machine. It also audits deeds that are
-already published.
+A purpose-bound identity-sharing prototype built on the original ThumbShield local redaction
+pipeline. The frontend demonstrates purpose presets, on-device raster flattening, manual mask
+placement, a tiled purpose watermark, masked-pixel checks, and a tamper-demo inspector. The
+existing backend detects Aadhaar numbers and thumb impressions in PDFs and fails closed when its
+verification cannot prove a clean result.
 
-**All data in this repo is synthetic.** Every generated PDF carries a
-"SYNTHETIC SAMPLE – NOT A REAL DOCUMENT" watermark. No real fingerprints, names or Aadhaar
-numbers are used.
+**All generated sample data is synthetic.** The current image-sharing UI is a prototype: it does
+not automatically detect fields, prove image quality, enforce a real expiry, or prevent a
+recipient from reusing a downloaded copy. The browser raster flow accepts images; PDF files use
+the existing Aadhaar / thumbprint scanner and do not receive the purpose watermark. The broader
+PAN / QR / face detection stack is not implemented.
 
-See [`docs/BRIEF.md`](docs/BRIEF.md) for the full brief and hard rules, and
+See [`docs/BRIEF.md`](docs/BRIEF.md) for the original PDF pipeline brief and hard rules, and
 [`BUILD_PROMPTS.md`](BUILD_PROMPTS.md) for the version plan (v0 → v5).
 
 ## Quick start
