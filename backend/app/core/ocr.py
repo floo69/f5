@@ -6,8 +6,11 @@ Bboxes are PDF points, top-left origin. Renders live only in memory (never writt
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import shutil
 from collections import OrderedDict
+from pathlib import Path
 
 import numpy as np
 import pymupdf
@@ -26,6 +29,18 @@ _ML_DIGITS = {ord("൦") + i: str(i) for i in range(10)}
 _CONFUSABLE = {"O": "0", "o": "0", "l": "1", "I": "1", "|": "1", "S": "5", "B": "8"}
 _STRIP = " \t\r\n:;,.()[]{}<>'\"`‘’“”"
 _ALNUM = re.compile(r"[0-9A-Za-zഀ-ൿ]")
+
+# Windows installs Tesseract per-machine, but its installer does not always refresh the PATH
+# of an already-open terminal. Keep the normal PATH behavior and add the standard install path
+# as a fallback so the local API can still use the installed OCR engine.
+if not shutil.which("tesseract"):
+    _windows_tesseract = (
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+        / "Tesseract-OCR"
+        / "tesseract.exe"
+    )
+    if _windows_tesseract.is_file():
+        pytesseract.pytesseract.tesseract_cmd = str(_windows_tesseract)
 
 
 def normalize_token(text: str) -> str:

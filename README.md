@@ -13,6 +13,9 @@ numbers are used.
 See [`docs/BRIEF.md`](docs/BRIEF.md) for the full brief and hard rules, and
 [`BUILD_PROMPTS.md`](BUILD_PROMPTS.md) for the version plan (v0 → v5).
 
+The frontend also includes an early **SurakshitID** purpose-bound image-sharing mode. Its current
+capabilities and safety limits are documented in [`docs/SURAKSHITID.md`](docs/SURAKSHITID.md).
+
 ## Quick start
 
 ```sh

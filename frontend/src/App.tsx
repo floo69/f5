@@ -4,8 +4,10 @@ import Header from './components/Header'
 import ProgressCard from './components/ProgressCard'
 import ResultView from './components/ResultView'
 import UploadCard from './components/UploadCard'
+import SurakshitID from './components/SurakshitID'
 
 type Phase = 'idle' | 'running' | 'result'
+type AppMode = 'thumbshield' | 'surakshit'
 
 export default function App() {
   const [phase, setPhase] = useState<Phase>('idle')
@@ -15,6 +17,7 @@ export default function App() {
   const [filename, setFilename] = useState('')
   const [result, setResult] = useState<api.Result | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<AppMode>('thumbshield')
   const timer = useRef<number | undefined>(undefined)
 
   const enableMock = useCallback(async () => {
@@ -95,21 +98,25 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <Header mock={mock} />
+      <Header mock={mock} mode={mode} onModeChange={setMode} />
       <main className="mx-auto max-w-7xl px-8 py-10">
-        {phase === 'idle' && (
-          <UploadCard
-            samples={samples}
-            busy={false}
-            error={error}
-            onFile={(f) => void start(f.name, () => api.processFile(f))}
-            onSample={(n) => void start(n + '.pdf', () => api.processSample(n))}
-            onDemo={mock ? () => { setResult(api.mockResult()); setPhase('result') } : undefined}
-          />
-        )}
-        {phase === 'running' && <ProgressCard job={job} filename={filename} />}
-        {phase === 'result' && result && (
-          <ResultView result={result} mock={mock} onReset={reset} />
+        {mode === 'surakshit' ? <SurakshitID /> : (
+          <>
+            {phase === 'idle' && (
+              <UploadCard
+                samples={samples}
+                busy={false}
+                error={error}
+                onFile={(f) => void start(f.name, () => api.processFile(f))}
+                onSample={(n) => void start(n + '.pdf', () => api.processSample(n))}
+                onDemo={mock ? () => { setResult(api.mockResult()); setPhase('result') } : undefined}
+              />
+            )}
+            {phase === 'running' && <ProgressCard job={job} filename={filename} />}
+            {phase === 'result' && result && (
+              <ResultView result={result} mock={mock} onReset={reset} />
+            )}
+          </>
         )}
       </main>
     </div>

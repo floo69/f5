@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -22,12 +23,14 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
+from backend.app.core import aadhaar, fp_classical, ocr
 from backend.app.core.report import certificate_dict, certificate_pdf
 from backend.app.pipeline import process_pdf
 
 log = logging.getLogger("thumbshield")
 OUT_DIR = Path("data/out")
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_SCAN_IMAGE_BYTES = 15 * 1024 * 1024
 MOSAIC_PX = 12
 
 # name -> (seed, split, mode, pages). Generated on demand: synthetic, deterministic, watermarked.
@@ -62,6 +65,128 @@ _one_at_a_time = threading.Semaphore(1)  # laptop RAM budget
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok", "local_only": True}
+
+
+@app.post("/api/surakshit/scan-image")
+async def scan_surakshit_image(file: UploadFile, id_type: str = "aadhaar") -> dict:
+    """On-device OCR and document-specific scan; return boxes only, never recognized values."""
+    allowed = {"aadhaar", "pan", "passport", "voter", "driving_license", "other"}
+    if id_type not in allowed:
+        raise HTTPException(400, "unsupported ID type")
+    raw = await file.read(MAX_SCAN_IMAGE_BYTES + 1)
+    if len(raw) > MAX_SCAN_IMAGE_BYTES:
+        raise HTTPException(413, "image larger than 15 MB")
+    image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+    if image is None or image.size == 0:
+        raise HTTPException(400, "image could not be decoded")
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    height, width = gray.shape
+    dpi = 200
+    enhanced = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    # Phone images vary in layout and contrast. Keep the locally-generated OCR pass with
+    # the strongest confidence instead of treating one sparse-text engine configuration as
+    # the only readability signal.
+    text_passes = [
+        ocr.ocr_image(gray, dpi, lang="eng+mal", psm=11),
+        ocr.ocr_image(gray, dpi, lang="eng", psm=11),
+        ocr.ocr_image(enhanced, dpi, lang="eng", psm=6),
+    ]
+    pt = max(text_passes, key=lambda page_text: page_text.ocr_quality)
+    readable_words = max(
+        (sum(bool(word.text.strip()) for word in page_text.words) for page_text in text_passes),
+        default=0,
+    )
+    detections: list[dict] = []
+
+    def add_box(kind: str, bbox_pt: tuple[float, float, float, float], confidence: float) -> None:
+        scale = dpi / 72.0
+        x0, y0, x1, y1 = (int(round(v * scale)) for v in bbox_pt)
+        pad = max(3, round(min(width, height) * 0.004))
+        box = [max(0, x0 - pad), max(0, y0 - pad), min(width, x1 + pad), min(height, y1 + pad)]
+        if box[2] > box[0] and box[3] > box[1]:
+            for found in detections:
+                if found["type"] != kind:
+                    continue
+                old = found["box"]
+                ix0, iy0 = max(box[0], old[0]), max(box[1], old[1])
+                ix1, iy1 = min(box[2], old[2]), min(box[3], old[3])
+                intersection = max(0, ix1 - ix0) * max(0, iy1 - iy0)
+                area = (box[2] - box[0]) * (box[3] - box[1])
+                old_area = (old[2] - old[0]) * (old[3] - old[1])
+                if intersection / max(1, min(area, old_area)) >= 0.5:
+                    return
+            detections.append(
+                {
+                    "type": kind,
+                    "box": box,
+                    "confidence": round(confidence, 3),
+                    "style": "blur",
+                }
+            )
+
+    # Aadhaar tokens and QR codes can occur on attached identity pages regardless of the
+    # selected primary card, so keep those broad defensive checks enabled for every type.
+    for page_text in text_passes:
+        for finding in aadhaar.find_numbers(page_text, 0):
+            if finding.type in {"AADHAAR", "VID"}:
+                add_box(finding.type, finding.bbox_pt, finding.confidence)
+    try:
+        _found, corners = cv2.QRCodeDetector().detect(gray)
+        if _found and corners is not None:
+            xs, ys = corners[0, :, 0], corners[0, :, 1]
+            qr_bbox = (
+                float(xs.min() * 72 / dpi),
+                float(ys.min() * 72 / dpi),
+                float(xs.max() * 72 / dpi),
+                float(ys.max() * 72 / dpi),
+            )
+            add_box("QR", qr_bbox, 0.8)
+    except cv2.error:
+        pass
+    if id_type in {"pan", "other"}:
+        pan_re = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+        for page_text in text_passes:
+            for word in page_text.words:
+                token = re.sub(r"[^A-Z0-9]", "", word.text.upper())
+                if pan_re.fullmatch(token):
+                    add_box("PAN", word.bbox_pt, word.conf)
+    if id_type in {"passport", "other"}:
+        passport_re = re.compile(r"^[A-Z][0-9]{7}$")
+        for page_text in text_passes:
+            for word in page_text.words:
+                token = re.sub(r"[^A-Z0-9]", "", word.text.upper())
+                if passport_re.fullmatch(token):
+                    add_box("PASSPORT_NUMBER", word.bbox_pt, word.conf)
+    if id_type in {"voter", "other"}:
+        epic_re = re.compile(r"^[A-Z]{3}[0-9]{7}$")
+        for page_text in text_passes:
+            for word in page_text.words:
+                token = re.sub(r"[^A-Z0-9]", "", word.text.upper())
+                if epic_re.fullmatch(token):
+                    add_box("VOTER_ID", word.bbox_pt, word.conf)
+    if id_type in {"driving_license", "other"}:
+        license_re = re.compile(r"^[A-Z]{2}[0-9]{2}[A-Z0-9]{8,13}$")
+        for page_text in text_passes:
+            for word in page_text.words:
+                token = re.sub(r"[^A-Z0-9]", "", word.text.upper())
+                if license_re.fullmatch(token):
+                    add_box("DRIVING_LICENSE", word.bbox_pt, word.conf)
+    # Run the existing tuned biometric detector for each ID type; it emits boxes only.
+    for finding in fp_classical.detect_gray(gray, 0, dpi=dpi):
+        add_box("FINGERPRINT", finding.bbox_pt, finding.confidence)
+    return {
+        "width": width,
+        "height": height,
+        "ocr_quality": round(pt.ocr_quality, 3),
+        "recognized_word_count": readable_words,
+        "text_layer": pt.text_layer,
+        "detections": detections,
+        "detectors": ["tesseract-eng-mal", "verhoeff", "classical-fingerprint", "opencv-qr"],
+        # Confidence alone is not a useful hard gate across scripts, layouts, and phone
+        # cameras. Require OCR to find text at all; the separate image-clarity gate blocks
+        # blurry captures, while the UI asks users to inspect for missed sensitive fields.
+        "verifiable": readable_words > 0,
+    }
 
 
 def _new_job(filename: str, pdf: bytes, background: BackgroundTasks) -> dict:
