@@ -114,3 +114,33 @@ def test_rejects_garbage_upload(client):
                     data={"preset": "hotel", "recipient": "Taj", "valid_days": 1})
     job = _wait(client, r.json()["job_id"])
     assert job["result"]["decision"] == "BLOCK_FOR_REVIEW"
+
+
+def test_rearmor_adds_user_box_and_revokes_old(client):
+    r = client.post("/api/id-samples/aadhaar-front-photo/armor",
+                    data={"preset": "hotel", "recipient": "Taj Hotel, Goa", "valid_days": 2})
+    first = _wait(client, r.json()["job_id"])
+    assert first["result"]["decision"] == "ARMOR_AND_ISSUE"
+    jid, old_id = first["job_id"], first["result"]["armor_id"]
+    assert client.get(f"/api/armor/{jid}/view.png",
+                      params={"which": "before", "outlines": 0}).status_code == 200
+
+    box = [20, 20, 180, 70]
+    too_many = [{"bbox_px": box}] * 21
+    assert client.post(f"/api/armor/{jid}/rearmor", json={"boxes": too_many}).status_code == 400
+
+    r2 = client.post(f"/api/armor/{jid}/rearmor",
+                     json={"boxes": [{"bbox_px": box, "label": "phone <b>number</b>"}]})
+    assert r2.status_code == 200
+    second = _wait(client, r2.json()["job_id"])
+    res = second["result"]
+    assert res["decision"] == "ARMOR_AND_ISSUE", res["reasons"]
+    assert res["armor_id"] != old_id
+    user = [f for f in res["findings"] if f["type"] == "USER"]
+    assert len(user) == 1 and user[0]["label"] == "phone bnumber/b"
+    assert box in res["masks_px"]
+    png = client.get(f"/api/armor/{second['job_id']}/armored.png").content
+    img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
+    assert img[box[1]:box[3], box[0]:box[2]].max() == 0
+    copies = {c["armor_id"]: c for c in client.get("/api/copies").json()}
+    assert copies[old_id]["status"] == "revoked"

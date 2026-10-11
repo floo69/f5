@@ -4,17 +4,15 @@ import DeedsTab from './components/DeedsTab'
 import AgentsTab from './components/armor/AgentsTab'
 import ArmorTab from './components/armor/ArmorTab'
 import CopiesTab from './components/armor/CopiesTab'
-import VerifyTab from './components/armor/VerifyTab'
 import { ICONS, ICONS2 } from './components/helpers'
 import { Icon } from './components/ui'
 
-type Tab = 'armor' | 'copies' | 'verify' | 'agents' | 'deeds'
+type Tab = 'armor' | 'copies' | 'agents' | 'deeds'
 const TABS: { key: Tab; label: string; short: string; icon: string }[] = [
   { key: 'armor', label: 'Protect', short: 'Protect', icon: ICONS.shield },
-  { key: 'copies', label: 'My copies', short: 'Copies', icon: ICONS2.list },
-  { key: 'verify', label: 'Check a copy', short: 'Check', icon: ICONS2.scan },
-  { key: 'agents', label: 'Leak alerts', short: 'Alerts', icon: ICONS2.bell },
   { key: 'deeds', label: 'Deeds', short: 'Registry', icon: ICONS2.building },
+  { key: 'copies', label: 'My copies', short: 'Copies', icon: ICONS2.list },
+  { key: 'agents', label: 'Leak alerts', short: 'Alerts', icon: ICONS2.bell },
 ]
 
 export default function App() {
@@ -42,7 +40,7 @@ export default function App() {
   return (
     <div className="min-h-screen pb-28 md:pb-12">
       <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
           <button type="button" onClick={() => go('armor')} className="flex min-w-0 items-center gap-2.5 text-left" aria-label="SurakshitID home">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent-600 to-accent-800 text-white shadow-sm">
               <Icon d={ICONS.shield} className="h-5 w-5" />
@@ -52,10 +50,11 @@ export default function App() {
               <span className="block truncate text-[11px] leading-tight text-slate-500" lang="hi">सुरक्षित ID</span>
             </span>
           </button>
-          <nav aria-label="Sections" className="hidden items-center gap-1 rounded-full bg-slate-100/80 p-1 md:flex">
+          <nav aria-label="Sections" className="hidden items-center gap-1.5 rounded-full bg-slate-100/80 p-1.5 md:flex">
             {TABS.map((t) => (
               <button key={t.key} type="button" onClick={() => go(t.key)} aria-current={tab === t.key ? 'page' : undefined}
-                className={`min-h-10 rounded-full px-4 text-sm font-semibold transition-colors duration-200 ${tab === t.key ? 'bg-white text-accent-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+                className={`flex min-h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-all duration-200 ${tab === t.key ? 'bg-white text-accent-800 shadow-sm' : 'text-slate-600 hover:bg-white/50 hover:text-slate-900'}`}>
+                <Icon d={t.icon} className="h-4 w-4" />
                 {t.label}
               </button>
             ))}
@@ -66,20 +65,19 @@ export default function App() {
         </div>
       </header>
 
-      <main className={`mx-auto px-4 py-6 sm:px-6 sm:py-10 ${tab === 'deeds' ? 'max-w-5xl' : 'max-w-[720px]'}`}>
+      <main className={`mx-auto px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12 ${tab === 'armor' || tab === 'deeds' ? 'max-w-6xl' : 'max-w-4xl'}`}>
         {ready && (
           <>
             <div hidden={tab !== 'armor'}><ArmorTab active={tab === 'armor'} /></div>
-            <div hidden={tab !== 'copies'}><CopiesTab active={tab === 'copies'} onProtect={() => go('armor')} /></div>
-            <div hidden={tab !== 'verify'}><VerifyTab /></div>
-            <div hidden={tab !== 'agents'}><AgentsTab /></div>
             <div hidden={tab !== 'deeds'}><DeedsTab mock={mock} /></div>
+            <div hidden={tab !== 'copies'}><CopiesTab active={tab === 'copies'} onProtect={() => go('armor')} /></div>
+            <div hidden={tab !== 'agents'}><AgentsTab /></div>
           </>
         )}
       </main>
 
       <nav aria-label="Sections" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/70 bg-white/90 backdrop-blur-xl md:hidden">
-        <ul className="mx-auto grid max-w-md grid-cols-5">
+        <ul className="mx-auto grid max-w-md grid-cols-4">
           {TABS.map((t) => (
             <li key={t.key}>
               <button type="button" onClick={() => go(t.key)} aria-current={tab === t.key ? 'page' : undefined} aria-label={t.label}

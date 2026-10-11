@@ -50,6 +50,7 @@ def new_armor_id() -> str:
 class ArmorOutput:
     result: dict
     prepared: Prepared | None = None
+    ocr_quality: float = 0.0
     findings: list[id_detect.IdFinding] = field(default_factory=list)
     final_rgb: np.ndarray | None = None
     png: bytes | None = None
@@ -59,6 +60,39 @@ class ArmorOutput:
 def _inside_any(b, boxes) -> bool:
     cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
     return any(x0 <= cx <= x1 and y0 <= cy <= y1 for x0, y0, x1, y1 in boxes)
+
+
+MAX_USER_BOXES = 20
+MIN_USER_BOX_PX = 8
+
+
+def clean_user_boxes(raw: list[dict] | None, shape: tuple[int, int]) -> list[dict]:
+    """Validate hand-drawn boxes: clip to the image, drop slivers, cap the count. Labels are
+    short plain text kept only in the findings list (never in the watermark)."""
+    h, w = shape
+    out = []
+    for b in (raw or [])[:MAX_USER_BOXES]:
+        try:
+            x0, y0, x1, y1 = (int(round(float(v))) for v in b["bbox_px"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        x0, x1 = sorted((max(0, min(w, x0)), max(0, min(w, x1))))
+        y0, y1 = sorted((max(0, min(h, y0)), max(0, min(h, y1))))
+        if x1 - x0 < MIN_USER_BOX_PX or y1 - y0 < MIN_USER_BOX_PX:
+            continue
+        label = "".join(c for c in str(b.get("label") or "") if c.isalnum() or c in " -/")[:24]
+        out.append({"bbox_px": [x0, y0, x1, y1], "label": label.strip() or None})
+    return out
+
+
+def _mostly_inside(b, boxes, frac: float = 0.5) -> bool:
+    bx0, by0, bx1, by1 = b
+    area = max(1, (bx1 - bx0) * (by1 - by0))
+    for x0, y0, x1, y1 in boxes:
+        iw, ih = min(bx1, x1) - max(bx0, x0), min(by1, y1) - max(by0, y0)
+        if iw > 0 and ih > 0 and iw * ih / area >= frac:
+            return True
+    return False
 
 
 def _pad(dpi: int) -> int:
@@ -151,8 +185,15 @@ def armor(
     sealer: badge_mod.Sealer,
     step: Callable[[str, str, float | None], None] | None = None,
     now: datetime | None = None,
+    extra_boxes: list[dict] | None = None,
+    reuse: ArmorOutput | None = None,
 ) -> ArmorOutput:
-    """Run the full pipeline. `step(key, status, ms)` reports progress."""
+    """Run the full pipeline. `step(key, status, ms)` reports progress.
+
+    `extra_boxes` are user-drawn rectangles (normalised pixel coords) that are zeroed in
+    addition to the detected ones: the user can only ever hide MORE. `reuse` re-runs the
+    destroy/watermark/verify/seal stages on an earlier output's normalised image and findings
+    (the original upload is never kept), so detection is identical to the first pass."""
     report = step or (lambda *_: None)
     timings: dict[str, float] = {}
     t = time.perf_counter()
@@ -181,7 +222,7 @@ def armor(
     report("capture", "running", None)
     report("preprocess", "running", None)
     try:
-        prep = prepare(data)
+        prep = reuse.prepared if reuse is not None else prepare(data)
     except UnreadableInput as e:
         g = decide_armor(ArmorSummary(preset_key, recipient, valid_days, False, 0.0, 0.0, ()))
         return ArmorOutput({**base, "decision": g.decision,
@@ -191,9 +232,13 @@ def armor(
     base["preprocess"] = prep.facts()
 
     report("detect", "running", None)
-    sc = id_detect.scan(prep.rgb, prep.dpi, prep.doc_kind)
-    findings = [f for f in sc.findings if f.type != "BADGE"]
-    base["ocr_quality"] = round(sc.ocr_quality, 3)
+    if reuse is not None:
+        findings, ocr_q = reuse.findings, reuse.ocr_quality
+    else:
+        sc = id_detect.scan(prep.rgb, prep.dpi, prep.doc_kind)
+        findings = [f for f in sc.findings if f.type != "BADGE"]
+        ocr_q = sc.ocr_quality
+    base["ocr_quality"] = round(ocr_q, 3)
     done("detect")
 
     report("decide", "running", None)
@@ -201,7 +246,7 @@ def armor(
     verified = sum(f.type in VERIFIED and not f.source.endswith("-suspect") for f in findings)
     doc_found = prep.quad_found or prep.doc_kind != "unknown"
     careful = needs_care(ArmorSummary(preset_key, recipient, valid_days, doc_found,
-                                      prep.blur_score, sc.ocr_quality, (), 0,
+                                      prep.blur_score, ocr_q, (), 0,
                                       verified_tokens=verified))
     portraits = [f.bbox_px for f in findings if f.type == "FACE"]
     shown, masks = [], []
@@ -220,13 +265,19 @@ def armor(
         shown.append({"type": f.type, "bbox_px": list(f.bbox_px), "action": act,
                       "masked_px": rects, "value_masked": f.value_masked,
                       "confidence": round(f.confidence, 3), "source": f.source})
+    user_boxes = clean_user_boxes(extra_boxes, (h, w))
+    for ub in user_boxes:
+        masks.append(ub["bbox_px"])
+        shown.append({"type": "USER", "bbox_px": ub["bbox_px"], "action": "MASK",
+                      "masked_px": [ub["bbox_px"]], "value_masked": None, "confidence": 1.0,
+                      "source": "user", "label": ub["label"]})
     base["findings"], base["masks_px"], base["careful"] = shown, masks, careful
     summary = ArmorSummary(preset_key, recipient, valid_days, doc_found, prep.blur_score,
-                           sc.ocr_quality, tuple(f.type for f in findings), unmaskable,
+                           ocr_q, tuple(f.type for f in findings), unmaskable,
                            verified_tokens=verified)
     gate = decide_armor(summary)
     done("decide")
-    out = ArmorOutput(base, prepared=prep, findings=findings)
+    out = ArmorOutput(base, prepared=prep, ocr_quality=ocr_q, findings=findings)
     if gate.decision != "ARMOR_AND_ISSUE":
         reasons = list(gate.reasons)
         if gate.decision == "BLOCK_FOR_REVIEW" and max(prep.source_px) < MIN_SOURCE_PX:
@@ -270,12 +321,16 @@ def armor(
 
     report("verify", "running", None)
     png, pdf = _encode(final, prep.dpi)
-    faces = [f.bbox_px for f in findings if f.type == "FACE"]
+    # a photo the user chose to hide carries no watermark by design
+    user_rects = [ub["bbox_px"] for ub in user_boxes]
+    faces = [f.bbox_px for f in findings if f.type == "FACE"
+             and not _mostly_inside(f.bbox_px, user_rects)]
     ver: RasterVerification = verify_export(
         final_rgb=final, png=png, pdf=pdf, destroyed_doc=destroyed, watermarked_doc=marked,
         masks=masks, preset=preset, dpi=prep.dpi, faces=faces, qr_payload=payload,
-        hidden=[tuple(f["bbox_px"]) for f in shown if f["action"] == "MASK"],
-        input_quality=sc.ocr_quality, careful=careful, prints=prep.doc_kind != "id_card")
+        hidden=[tuple(f["bbox_px"]) for f in shown
+                if f["action"] == "MASK" and f["type"] != "USER"],
+        input_quality=ocr_q, careful=careful, prints=prep.doc_kind != "id_card")
     base["verification"] = ver.model_dump()
     done("verify")
 

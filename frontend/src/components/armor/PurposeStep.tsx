@@ -29,21 +29,25 @@ export default function PurposeStep({ presets, value, onChange, onBack, onRun }:
   const ok = Boolean(preset) && value.recipient.trim().length >= 3
 
   const onIntent = (i: armor.VoiceIntent) => {
-    const p = presets.find((x) => x.key === i.preset)
+    const p = presets.find((x) => x.key === i.preset) ?? preset
+    const cap = p?.max_days ?? max
+    const requested = i.valid_days ?? (i.preset ? p?.default_days : null) ?? value.days
     onChange({
       preset: p ? p.key : value.preset,
-      recipient: i.recipient ?? value.recipient,
-      days: i.valid_days ? Math.min(Math.max(1, i.valid_days), p?.max_days ?? max) : (p?.default_days ?? value.days),
+      recipient: i.recipient?.trim() || value.recipient,
+      days: Math.min(Math.max(1, requested), cap),
     })
   }
 
   return (
-    <div className="fade-up space-y-5" aria-label="Who is it for">
-      <div>
-        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Who is this copy for?</h2>
+    <div className="fade-up space-y-5 lg:space-y-8" aria-label="Who is it for">
+      <div className="lg:text-center">
+        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 lg:text-4xl">Who is this copy for?</h2>
         <p className="mt-1 text-sm text-slate-600">We hide everything they don&rsquo;t need. The copy only works for them.</p>
       </div>
 
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start lg:gap-8">
+      <div className="space-y-5">
       <section className={card} aria-label="Reason">
         <fieldset>
           <legend className="text-sm font-bold text-slate-900">What is it for?</legend>
@@ -95,6 +99,8 @@ export default function PurposeStep({ presets, value, onChange, onBack, onRun }:
         </div>
       </section>
 
+      </div>
+      <div className="space-y-5 lg:sticky lg:top-24">
       <VoiceCard onIntent={onIntent} />
 
       {preset && (
@@ -108,8 +114,10 @@ export default function PurposeStep({ presets, value, onChange, onBack, onRun }:
           <p className="mt-2 text-xs text-slate-400">Anyone who sees this copy knows exactly what it can be used for.</p>
         </section>
       )}
+      </div>
+      </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 lg:mx-auto lg:max-w-xl">
         <button type="button" onClick={onBack} className={btnGhost}>Back</button>
         <button type="button" disabled={!ok} onClick={onRun} className={`${btnPrimary} min-h-14 flex-1 text-base`}>Protect my ID</button>
       </div>

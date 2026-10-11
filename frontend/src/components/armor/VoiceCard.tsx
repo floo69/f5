@@ -4,7 +4,7 @@ import { ICONS } from '../helpers'
 import { Icon } from '../ui'
 import { btnSecondary, input } from './styles'
 
-const MISSING: Record<string, string> = { recipient: 'who it is for', preset: 'what it is for' }
+const MISSING: Record<string, string> = { recipient: 'who it is for', preset: 'what it is for', purpose: 'what it is for' }
 
 interface Rec {
   lang: string
@@ -52,13 +52,25 @@ export default function VoiceCard({ onIntent }: { onIntent: (i: armor.VoiceInten
     }
   }
 
-  // First try on-device en-IN; if the browser can't do that, retry once with its default
-  // recogniser (en-US); if speech still isn't available, quietly point to the text box.
+  // First try on-device en-IN; on any capture/language/service error retry once with the
+  // browser's default recogniser (en-US). No getUserMedia pre-flight: grabbing and releasing
+  // the mic right before recognition can make it fail with a bogus "audio-capture" error.
   const listen = (fallback = false) => {
     const C = getCtor()
     if (!C) return
     if (listening && !fallback) { rec.current?.stop(); return }
     setError(null)
+
+    // SpeechRecognition requires a secure context: https or localhost.
+    // When served over plain http on a network IP, the browser silently blocks mic access
+    // and throws a misleading NotFoundError instead of a permission error.
+    if (!window.isSecureContext) {
+      setError(
+        'Voice requires a secure connection. Open this page at http://localhost:5173 instead, or enable HTTPS.'
+      )
+      return
+    }
+
     const r = new C()
     r.lang = fallback ? 'en-US' : 'en-IN'
     r.interimResults = false
@@ -67,21 +79,41 @@ export default function VoiceCard({ onIntent }: { onIntent: (i: armor.VoiceInten
     r.onresult = (e) => {
       const t = e.results[0]?.[0]?.transcript ?? ''
       setText(t)
+      setError(null)
       void send(t)
     }
     r.onerror = (e) => {
-      setListening(false)
-      if (e.error === 'no-speech' || e.error === 'aborted') return
-      if (!fallback && ['language-not-supported', 'service-not-allowed', 'network'].includes(e.error)) {
+      if (rec.current === r) setListening(false)
+      if (e.error === 'aborted') return
+      if (e.error === 'no-speech') {
+        setError('We didn\u2019t hear anything. Press Speak and try again.')
+        return
+      }
+      if (!fallback && ['language-not-supported', 'service-not-allowed', 'network', 'audio-capture'].includes(e.error)) {
         listen(true)
         return
       }
-      setError('Voice isn\u2019t available in this browser. Please type it instead.')
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setError('Microphone or voice recognition is blocked for this site. Open the site permissions from your browser\u2019s address bar, allow Microphone, reload, then press Speak.')
+      } else if (e.error === 'audio-capture') {
+        setError('The browser could not open your microphone. Check that the right input device is selected in your system and browser settings, or type the command.')
+      } else if (e.error === 'network') {
+        setError('The browser could not reach its speech recognition service. Try Chrome or Edge with internet access, or type the command.')
+      } else if (e.error === 'language-not-supported') {
+        setError('This browser does not support speech recognition in English. Try Chrome or Edge, or type the command.')
+      } else {
+        setError(`Voice recognition failed (${e.error}). Allow microphone access in site permissions, or type the command.`)
+      }
     }
-    r.onend = () => setListening(false)
+    r.onend = () => { if (rec.current === r) setListening(false) }
     rec.current = r
     setListening(true)
-    try { r.start() } catch { setListening(false) }
+    try {
+      r.start()
+    } catch {
+      if (rec.current === r) setListening(false)
+      setError('Could not start voice recognition. Check microphone access and try again.')
+    }
   }
 
   return (
@@ -95,7 +127,7 @@ export default function VoiceCard({ onIntent }: { onIntent: (i: armor.VoiceInten
           <button type="button" onClick={() => listen()} aria-pressed={listening}
             aria-label={listening ? 'Stop listening' : 'Start voice command'}
             className={`flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-white transition ${listening ? 'bg-red-600' : 'bg-saffron-600 hover:bg-saffron-700'}`}>
-            <Icon d={ICONS.mic} className="h-5 w-5" />{listening ? 'Listening…' : 'Speak'}
+            <Icon d={ICONS.mic} className="h-5 w-5" />{listening ? 'Listening\u2026' : 'Speak'}
           </button>
         )}
         <form className="flex min-w-0 flex-1 gap-2" onSubmit={(e) => { e.preventDefault(); void send(text) }}>

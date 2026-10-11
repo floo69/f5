@@ -3,7 +3,7 @@ import * as armor from '../../armorApi'
 import { ICONS, ICONS2 } from '../helpers'
 import { Icon } from '../ui'
 import Inspector from './Inspector'
-import { btnGhost, btnPrimary, btnSecondary, card, fmtDate, fmtDay } from './styles'
+import { btnBase, btnGhost, btnPrimary, btnSecondary, card, fmtDate, fmtDay } from './styles'
 
 const TIPS: [string, string][] = [
   ['Good light', ICONS2.sparkle],
@@ -38,6 +38,9 @@ function chipsFor(findings: armor.IdFinding[]): Chip[] {
       case 'FINGERPRINT':
         add({ label: 'Thumbprint — removed', icon: ICONS2.hand, tone: 'hidden' })
         break
+      case 'USER':
+        add({ label: f.label ? `${f.label} — hidden (you chose)` : 'Your box — hidden', icon: ICONS.eye, tone: 'hidden' })
+        break
       case 'FACE':
         add({ label: 'Photo — kept', icon: ICONS2.user, tone: 'kept' })
         break
@@ -54,25 +57,20 @@ function chipsFor(findings: armor.IdFinding[]): Chip[] {
   return [...out.values()]
 }
 
-function Compare({ id }: { id: string }) {
-  const [pos, setPos] = useState(50)
+function ArmoredView({ id }: { id: string }) {
   return (
     <div>
       <div className="relative select-none overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-inner">
-        <img src={armor.viewUrl(id, 'after')} alt="Your safe copy" className="block h-auto w-full" draggable={false} />
-        <img src={armor.viewUrl(id, 'before')} alt="Your photo with private parts blurred for display" draggable={false}
-          className="absolute inset-0 block h-full w-full object-fill" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }} />
-        <span className="absolute left-3 top-3 rounded-full bg-slate-900/70 px-2.5 py-1 text-[11px] font-semibold text-white">Before</span>
-        <span className="absolute right-3 top-3 rounded-full bg-accent-700/90 px-2.5 py-1 text-[11px] font-semibold text-white">After</span>
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 w-0.5 bg-white shadow-[0_0_0_1px_rgb(15_23_42/0.15)]" style={{ left: `${pos}%` }}>
-          <span className="absolute top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-accent-700 shadow-lg">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l-6 6 6 6 M15 6l6 6-6 6" /></svg>
-          </span>
-        </div>
-        <input type="range" min={0} max={100} value={pos} onChange={(e) => setPos(Number(e.target.value))}
-          aria-label="Slide to compare before and after" className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0" />
+        <img
+          src={armor.viewUrl(id, 'after')}
+          alt="Watermarked and redacted safe copy"
+          className="block h-auto w-full"
+          draggable={false}
+        />
+        <span className="absolute right-3 top-3 rounded-full bg-accent-700/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+          Watermarked &amp; Redacted
+        </span>
       </div>
-      <p className="mt-2 text-center text-xs text-slate-500">Drag to compare. &ldquo;Before&rdquo; is your original, shown only on this device (thumbprints and QR codes stay blurred).</p>
     </div>
   )
 }
@@ -81,11 +79,12 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return <div className="flex justify-between gap-4 py-2 text-sm"><dt className="text-slate-500">{k}</dt><dd className="text-right font-medium text-slate-900">{v}</dd></div>
 }
 
-export default function ResultPanel({ result, jobId, onPurpose, onRetake, onReset }: {
+export default function ResultPanel({ result, jobId, onPurpose, onEdit, onRetake, onReset }: {
   result: armor.ArmorResult
   /** backend job id: every file/inspect/attack route is keyed by it (not the armor id) */
   jobId: string
   onPurpose: () => void
+  onEdit: () => void
   onRetake: () => void
   onReset: () => void
 }) {
@@ -109,6 +108,34 @@ export default function ResultPanel({ result, jobId, onPurpose, onRetake, onRese
       else setMsg('Sharing isn’t available here. Please use Download instead.')
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) setMsg('We couldn’t open sharing. Please use Download instead.')
+    }
+  }
+
+  const shareText = `Safe copy of my ID for ${result.recipient}: ${result.preset.label} only, valid till ${fmtDay(result.expires_at)}. Copy ID ${result.armor_id}. It is locked to this purpose and can be verified on SurakshitID.`
+
+  // One tap: where the browser can share files (phones) the share sheet opens with the safe
+  // copy attached and the user picks WhatsApp. wa.me cannot attach files, so on desktop we
+  // download the copy and open WhatsApp with the message ready to send along with it.
+  const whatsapp = async () => {
+    setMsg(null)
+    const url = dl('armored.png')
+    if (!url) return
+    try {
+      const blob = await (await fetch(url)).blob()
+      const file = new File([blob], `safe-copy-${result.armor_id}.png`, { type: 'image/png' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], text: shareText })
+        return
+      }
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = file.name
+      a.click()
+      window.setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener')
+      setMsg('Your safe copy was saved. In WhatsApp, choose a chat and attach it with the paperclip.')
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) setMsg('We couldn’t open WhatsApp. Please use Download instead.')
     }
   }
 
@@ -160,8 +187,8 @@ export default function ResultPanel({ result, jobId, onPurpose, onRetake, onRese
       )}
 
       {ok && (
-        <section className={card} aria-label="Before and after">
-          <Compare id={jobId} />
+        <section className={card} aria-label="Watermarked and redacted copy">
+          <ArmoredView id={jobId} />
           {chips.length > 0 && (
             <ul className="mt-4 flex flex-wrap gap-2" aria-label="What we did">
               {chips.map((c) => (
@@ -181,6 +208,13 @@ export default function ResultPanel({ result, jobId, onPurpose, onRetake, onRese
           <a href={dl('armored.png') ?? undefined} download="safe-copy.png" className={`${btnPrimary} min-h-14 w-full text-base`}>
             <Icon d={ICONS.download} className="h-5 w-5" />Download safe copy
           </a>
+          <button type="button" onClick={() => void whatsapp()}
+            className={`${btnBase} min-h-14 w-full bg-[#25D366] text-base text-white shadow-sm hover:bg-[#1ebe5b]`}>
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+              <path d="M12 2a10 10 0 00-8.6 15.100L2 22l5-1.300A10 10 0 1012 2zm5.800 14.200c-.2.700-1.300 1.300-1.800 1.300-.5.100-1 .200-3.300-.700-2.800-1.100-4.600-3.900-4.700-4.100-.1-.2-1.100-1.500-1.100-2.800s.7-2 1-2.300c.2-.3.500-.3.700-.3h.5c.2 0 .4 0 .6.500l.8 2c.1.200.1.300 0 .500l-.3.400-.4.500c-.1.100-.3.300-.1.600.2.300.8 1.300 1.700 2.100 1.200 1 2.100 1.300 2.400 1.500.3.100.5.100.600-.1l.9-1.100c.2-.3.400-.2.600-.1l1.900.9c.3.100.5.200.5.300.100.100.100.700-.1 1.200z" />
+            </svg>
+            Share on WhatsApp
+          </button>
           <div className="grid grid-cols-2 gap-3">
             {pdfUrl ? (
               <a href={pdfUrl} download="safe-copy.pdf" className={btnSecondary}>PDF</a>
@@ -202,6 +236,9 @@ export default function ResultPanel({ result, jobId, onPurpose, onRetake, onRese
 
       {ok && (
         <div className="space-y-2">
+          <button type="button" onClick={onEdit} className="mx-auto flex min-h-11 items-center gap-1.5 text-sm font-semibold text-accent-800 underline-offset-4 hover:underline">
+            <Icon d={ICONS.eye} className="h-4 w-4" />Hide something else
+          </button>
           <button ref={returnFocus} type="button" onClick={() => setOpen(true)} className="mx-auto flex min-h-11 items-center gap-1.5 text-sm font-semibold text-accent-800 underline-offset-4 hover:underline">
             <Icon d={ICONS2.info} className="h-4 w-4" />How do we know it&rsquo;s safe?
           </button>

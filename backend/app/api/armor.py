@@ -25,7 +25,13 @@ from fastapi.responses import Response
 from PIL import Image
 from pydantic import BaseModel
 
-from backend.app.armor_pipeline import STEPS, ArmorOutput, armor
+from backend.app.armor_pipeline import (
+    MAX_USER_BOXES,
+    STEPS,
+    ArmorOutput,
+    armor,
+    clean_user_boxes,
+)
 from backend.app.core import badge as badge_mod
 from backend.app.core.presets import PRESETS
 from backend.app.core.verify_raster import pdf_facts, pdf_pixels, png_chunks
@@ -120,22 +126,24 @@ def _out(job_id: str, need_issue: bool = False) -> ArmorOutput:
 
 
 def _start(data: bytes, preset: str, recipient: str, valid_days: int, source: str,
-           background: BackgroundTasks) -> dict:
+           background: BackgroundTasks, *, reuse: ArmorOutput | None = None,
+           extra_boxes: list[dict] | None = None) -> dict:
     job_id = uuid.uuid4().hex[:12]
     job = {"job_id": job_id, "status": "queued", "error": None, "source": source,
            "steps": [{"key": k, "label": lbl, "status": "pending", "ms": None}
                      for k, lbl in STEPS],
-           "result": None}
+           "result": None, "params": (preset, recipient, valid_days)}
     with _lock:
         _jobs[job_id] = job
         while len(_jobs) > MAX_JOBS:
             old, _ = _jobs.popitem(last=False)
             _private.pop(old, None)
-    background.add_task(_run, job_id, data, preset, recipient, valid_days)
+    background.add_task(_run, job_id, data, preset, recipient, valid_days, reuse, extra_boxes)
     return {"job_id": job_id}
 
 
-def _run(job_id: str, data: bytes, preset: str, recipient: str, valid_days: int) -> None:
+def _run(job_id: str, data: bytes, preset: str, recipient: str, valid_days: int,
+         reuse: ArmorOutput | None = None, extra_boxes: list[dict] | None = None) -> None:
     job = _jobs.get(job_id)
     if job is None:
         return
@@ -147,12 +155,15 @@ def _run(job_id: str, data: bytes, preset: str, recipient: str, valid_days: int)
     with _heavy:
         job["status"] = "processing"
         try:
-            out = armor(data, preset, recipient, valid_days, SEALER, step)
+            out = armor(data, preset, recipient, valid_days, SEALER, step,
+                        extra_boxes=extra_boxes, reuse=reuse)
             del data
             for s in job["steps"]:
                 if s["status"] == "running":
                     s["status"] = "failed" if out.result["decision"] != "ARMOR_AND_ISSUE" \
                         else "done"
+            if reuse is not None and out.png is not None:
+                SEALER.revoke(reuse.result["armor_id"])  # superseded by the edited copy
             _private[job_id] = out
             job["result"] = out.result
             job["status"] = "done"
@@ -215,8 +226,32 @@ def armor_job(job_id: str) -> dict:
     return {k: j[k] for k in ("job_id", "status", "error", "steps", "result")}
 
 
+class BoxIn(BaseModel):
+    bbox_px: list[float]
+    label: str | None = None
+
+
+class RearmorIn(BaseModel):
+    boxes: list[BoxIn]
+
+
+@router.post("/armor/{job_id}/rearmor")
+def rearmor(job_id: str, body: RearmorIn, background: BackgroundTasks) -> dict:
+    """Re-issue the copy with extra hand-drawn redaction boxes (additive only). The earlier
+    copy is revoked once the new one is issued."""
+    o = _out(job_id)
+    if o.prepared is None or o.png is None:
+        raise HTTPException(409, "nothing to edit: this job produced no copy")
+    if len(body.boxes) > MAX_USER_BOXES:
+        raise HTTPException(400, f"at most {MAX_USER_BOXES} boxes")
+    boxes = clean_user_boxes([b.model_dump() for b in body.boxes], o.prepared.rgb.shape[:2])
+    preset, recipient, days = _job(job_id)["params"]
+    return _start(b"", preset, recipient, days, _job(job_id)["source"], background,
+                  reuse=o, extra_boxes=boxes)
+
+
 @router.get("/armor/{job_id}/view.png")
-def armor_view(job_id: str, which: str = "after") -> Response:
+def armor_view(job_id: str, which: str = "after", outlines: int = 1) -> Response:
     o = _out(job_id)
     if which == "after":
         if o.final_rgb is None:
@@ -228,6 +263,8 @@ def armor_view(job_id: str, which: str = "after") -> Response:
     img = _safe_preview(o.prepared.rgb,
                         [f.bbox_px for f in o.findings if f.type in PIXELATE_TYPES],
                         o.prepared.dpi)
+    if not outlines:  # editor: same pixels, no server-drawn boxes (the UI draws its own)
+        return Response(_png(img), media_type="image/png", headers={"Cache-Control": "no-store"})
     colors = {"MASK": (220, 38, 38), "MASK_PARTIAL": (217, 119, 6), "KEEP": (22, 163, 74)}
     t = max(2, img.shape[1] // 400)
     for f in o.result["findings"]:

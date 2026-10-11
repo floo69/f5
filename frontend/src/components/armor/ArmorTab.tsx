@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as armor from '../../armorApi'
+import RedactEditor from './RedactEditor'
 import CaptureStep, { type Captured } from './CaptureStep'
 import PurposeStep, { type Purpose } from './PurposeStep'
 import ResultPanel from './ResultPanel'
 import Timeline from './Timeline'
 import { friendlyError } from './styles'
 
-type Phase = 'capture' | 'purpose' | 'running' | 'result'
+type Phase = 'capture' | 'purpose' | 'running' | 'result' | 'edit'
 const STEPS = ['Add photo', 'Choose who it\u2019s for', 'Done']
-const STEP_OF: Record<Phase, number> = { capture: 0, purpose: 1, running: 2, result: 2 }
+const STEP_OF: Record<Phase, number> = { capture: 0, purpose: 1, running: 2, result: 2, edit: 2 }
 
 export default function ArmorTab({ active }: { active: boolean }) {
   const [phase, setPhase] = useState<Phase>('capture')
@@ -74,6 +75,20 @@ export default function ArmorTab({ active }: { active: boolean }) {
     }
   }
 
+  const rearmor = async (boxes: armor.UserBox[]) => {
+    if (!job) return
+    const g = ++gen.current
+    setError(null)
+    setPhase('running')
+    try {
+      const { job_id } = await armor.rearmor(job.job_id, boxes)
+      poll(job_id, g)
+    } catch (e) {
+      setError(friendlyError(e, 'We could not update your copy. Please try again.'))
+      setPhase('result')
+    }
+  }
+
   const reset = () => {
     gen.current++
     window.clearTimeout(timer.current)
@@ -85,7 +100,7 @@ export default function ArmorTab({ active }: { active: boolean }) {
   const idx = STEP_OF[phase]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 lg:space-y-8">
       <ol className="flex items-center justify-center gap-2 text-xs font-semibold sm:text-sm" aria-label="Steps">
         {STEPS.map((label, i) => (
           <li key={label} aria-current={i === idx ? 'step' : undefined} className="flex items-center gap-2">
@@ -95,19 +110,22 @@ export default function ArmorTab({ active }: { active: boolean }) {
           </li>
         ))}
       </ol>
-      {error && <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-100">{error}</p>}
+      {error && <p role="alert" className="mx-auto max-w-3xl rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-100">{error}</p>}
 
       {phase === 'capture' && (
-        <CaptureStep active={active} captured={captured} onCaptured={setCaptured} onNext={() => setPhase('purpose')} />
+        <div className="mx-auto max-w-3xl"><CaptureStep active={active} captured={captured} onCaptured={setCaptured} onNext={() => setPhase('purpose')} /></div>
       )}
       {phase === 'purpose' && (
         <PurposeStep presets={presets} value={purpose} onChange={setPurpose} onBack={() => setPhase('capture')} onRun={() => void run()} />
       )}
       {phase === 'running' && (
-        <Timeline steps={job?.steps ?? pendingSteps()} />
+        <div className="mx-auto max-w-3xl"><Timeline steps={job?.steps ?? pendingSteps()} /></div>
+      )}
+      {phase === 'edit' && result && job && (
+        <RedactEditor jobId={job.job_id} result={result} onApply={(b) => void rearmor(b)} onCancel={() => setPhase('result')} />
       )}
       {phase === 'result' && result && (
-        <ResultPanel result={result} jobId={job?.job_id ?? result.armor_id} onPurpose={() => setPhase('purpose')} onRetake={reset} onReset={reset} />
+        <div className="mx-auto max-w-3xl"><ResultPanel result={result} jobId={job?.job_id ?? result.armor_id} onPurpose={() => setPhase('purpose')} onEdit={() => setPhase('edit')} onRetake={reset} onReset={reset} /></div>
       )}
     </div>
   )

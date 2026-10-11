@@ -30,7 +30,7 @@ export interface VoiceIntent {
 export type Decision = 'ARMOR_AND_ISSUE' | 'INSUFFICIENT_PURPOSE' | 'BLOCK_FOR_REVIEW'
 export type FindingType =
   | 'AADHAAR' | 'VID' | 'MASKED_AADHAAR' | 'PAN' | 'QR' | 'BARCODE' | 'FACE' | 'FINGERPRINT' | 'DOB' | 'NUMBER'
-  | 'ADDRESS'
+  | 'ADDRESS' | 'USER'
 export interface IdFinding {
   type: FindingType
   bbox_px: [number, number, number, number]
@@ -39,6 +39,8 @@ export interface IdFinding {
   value_masked: string | null
   confidence: number
   source: string
+  /** only on hand-drawn boxes (type 'USER') */
+  label?: string | null
 }
 export interface Step {
   key: string
@@ -218,7 +220,11 @@ ${kind === 'input' ? '' : `<text x="40" y="610" font-family="sans-serif" font-si
 </svg>`
 }
 
-const mockJobs = new Map<string, { name: string; started: number; p: ArmorParams; recorded?: boolean }>()
+export interface UserBox {
+  bbox_px: [number, number, number, number]
+  label: string | null
+}
+const mockJobs = new Map<string, { name: string; started: number; p: ArmorParams; recorded?: boolean; extra?: UserBox[] }>()
 let mockCopies: Copy[] | null = null
 const copiesStore = (): Copy[] =>
   (mockCopies ??= mockCopiesJson.map((c) => {
@@ -237,7 +243,7 @@ const mockAttackRegions: Record<AttackKind, number[][]> = {
   crop: [[0, 0, MOCK_W, MOCK_H]],
 }
 
-function mockResult(id: string, p: ArmorParams): ArmorResult {
+function mockResult(id: string, p: ArmorParams, extra: UserBox[] = []): ArmorResult {
   const base = structuredClone(mockResultJson) as unknown as ArmorResult
   const preset = (mockPresets as unknown as Preset[]).find((x) => x.key === p.preset) ?? base.preset
   const issued = new Date()
@@ -248,6 +254,13 @@ function mockResult(id: string, p: ArmorParams): ArmorResult {
   base.issued_at = issued.toISOString()
   base.expires_at = exp.toISOString()
   base.watermark_text = watermarkText(preset, p.recipient, p.valid_days, issued)
+  for (const u of extra) {
+    base.masks_px.push([...u.bbox_px])
+    base.findings.push({
+      type: 'USER', bbox_px: u.bbox_px, action: 'MASK', masked_px: [[...u.bbox_px]], value_masked: null,
+      confidence: 1, source: 'user', label: u.label,
+    })
+  }
   const blur = p.filename.includes('blur')
   const bad = p.recipient.trim().length < 3 || p.valid_days < 1 || p.valid_days > preset.max_days
   if (blur) {
@@ -281,7 +294,7 @@ function mockJobState(id: string): ArmorJob {
   const t = Date.now() - m.started
   const idx = Math.floor(t / STEP_MS)
   const done = idx >= STEP_DEFS.length
-  const res = mockResult(id, m.p)
+  const res = mockResult(id, m.p, m.extra)
   const steps: Step[] = STEP_DEFS.map(([key, label], i) => ({
     key,
     label,
@@ -414,18 +427,38 @@ export async function getArmorJob(id: string): Promise<ArmorJob> {
   return json<ArmorJob>(await fetch(`/api/armor/${id}`))
 }
 
-export function viewUrl(id: string, which: 'before' | 'after'): string {
+export function viewUrl(id: string, which: 'before' | 'after', outlines = true): string {
   if (isMock()) {
     const masks = (mockResultJson as unknown as ArmorResult).masks_px
-    return svgUrl(placeholderSvg(which, masks))
+    if (which === 'before' && !outlines) return svgUrl(placeholderSvg('before', []))
+    return svgUrl(placeholderSvg(which, [...masks, ...(mockJobs.get(id)?.extra ?? []).map((u) => [...u.bbox_px])]))
   }
-  return `/api/armor/${id}/view.png?which=${which}`
+  return `/api/armor/${id}/view.png?which=${which}${outlines ? '' : '&outlines=0'}`
+}
+
+/** Re-issue the copy with extra hand-drawn boxes. Additive only; the earlier copy is revoked. */
+export async function rearmor(id: string, boxes: UserBox[]): Promise<{ job_id: string }> {
+  if (isMock()) {
+    const old = mockJobs.get(id)
+    if (!old) throw new Error('unknown mock job')
+    const nid = 'SKID-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase()
+    mockJobs.set(nid, { name: old.name, started: Date.now(), p: old.p, extra: boxes })
+    const prev = copiesStore().find((c) => c.armor_id === id)
+    if (prev) { prev.status = 'revoked'; prev.revoked_at = new Date().toISOString() }
+    await sleep(120)
+    return { job_id: nid }
+  }
+  return json(await fetch(`/api/armor/${id}/rearmor`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ boxes }),
+  }))
 }
 
 export type DownloadKind = 'armored.png' | 'armored.pdf' | 'badge.json'
 export function downloadUrl(id: string, kind: DownloadKind, result?: ArmorResult): string | null {
   if (isMock()) {
-    if (kind === 'armored.png') return svgUrl(placeholderSvg('after', (mockResultJson as unknown as ArmorResult).masks_px))
+    if (kind === 'armored.png') return svgUrl(placeholderSvg('after', [...(mockResultJson as unknown as ArmorResult).masks_px, ...(mockJobs.get(id)?.extra ?? []).map((u) => [...u.bbox_px])]))
     if (kind === 'badge.json' && result?.badge)
       return 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(result.badge, null, 2))
     return null // no PDF in demo mode
